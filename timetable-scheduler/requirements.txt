@@ -1,0 +1,12 @@
+﻿Flask==3.0.0
+Flask-CORS==4.0.0
+pymongo==4.6.0
+python-dotenv==1.0.0
+marshmallow==3.20.1
+numpy==1.24.3
+python-constraint==1.4.0
+dataclasses-json==0.6.3
+typing-extensions==4.9.0
+PyJWT==2.8.0
+Werkzeug==3.0.1
+email-validator==2.1.0cls
