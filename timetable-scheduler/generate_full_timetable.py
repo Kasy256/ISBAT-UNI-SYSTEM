@@ -171,7 +171,6 @@ def generate_timetable_for_group(student_group, courses, lecturers, rooms, all_a
                     'session_id': gene.session_id,
                     'student_group_id': gene.student_group_id,
                     'student_group_name': student_group.display_name,
-                    'batch': student_group.batch,
                     'semester': student_group.semester,
                     'term': term,
                     'group_size': student_group.size,
@@ -203,7 +202,7 @@ def export_full_timetable(all_assignments, courses, lecturers, rooms, filename='
         "Course_Code", "Course_Name", "Course_Type", "Credits",
         "Lecturer_ID", "Lecturer_Name", "Lecturer_Role",
         "Room_Number", "Room_Type", "Room_Capacity", "Room_Building", "Room_Campus",
-        "Student_Group", "Batch", "Semester", "Term", "Group_Size"
+        "Student_Group", "Semester", "Term", "Group_Size"
     ]
     
     with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
@@ -239,7 +238,6 @@ def export_full_timetable(all_assignments, courses, lecturers, rooms, filename='
                 "Room_Building": room.building,
                 "Room_Campus": getattr(room, 'campus', 'N/A'),
                 "Student_Group": assignment['student_group_name'],
-                "Batch": assignment['batch'],
                 "Semester": assignment['semester'],
                 "Term": assignment['term'],
                 "Group_Size": assignment['group_size']
@@ -256,7 +254,6 @@ def generate_statistics(all_assignments, courses, lecturers, rooms, csv_filename
     """Generate comprehensive statistics"""
     
     # Group by various dimensions
-    by_batch = defaultdict(int)
     by_semester = defaultdict(int)
     by_day = defaultdict(int)
     by_course = defaultdict(int)
@@ -264,8 +261,7 @@ def generate_statistics(all_assignments, courses, lecturers, rooms, csv_filename
     by_room = defaultdict(int)
     
     for assignment in all_assignments:
-        by_batch[assignment['batch']] += 1
-        by_semester[f"{assignment['batch']}-{assignment['semester']}"] += 1
+        by_semester[assignment['semester']] += 1
         by_day[assignment['day']] += 1
         by_course[assignment['course_id']] += 1
         by_lecturer[assignment['lecturer_id']] += 1
@@ -283,12 +279,6 @@ def generate_statistics(all_assignments, courses, lecturers, rooms, csv_filename
         f.write(f"Total Sessions: {len(all_assignments)}\n\n")
         
         f.write("="*70 + "\n")
-        f.write("SESSIONS BY BATCH\n")
-        f.write("="*70 + "\n")
-        for batch, count in sorted(by_batch.items()):
-            f.write(f"  {batch}: {count} sessions\n")
-        
-        f.write("\n" + "="*70 + "\n")
         f.write("SESSIONS BY SEMESTER\n")
         f.write("="*70 + "\n")
         for sem, count in sorted(by_semester.items()):
@@ -343,19 +333,15 @@ def main():
         # Load all data
         student_groups, courses, lecturers, rooms = fetch_all_data(db)
         
-        # Filter for BSCAIT-126 batch (or process all batches)
-        target_batch = 'BSCAIT-126'
-        batch_groups = [sg for sg in student_groups if sg.batch == target_batch]
-        
-        print(f"\n🎯 Generating timetable for: {target_batch}")
-        print(f"   Student Groups: {len(batch_groups)}")
-        print(f"   Semesters: {len(set(sg.semester for sg in batch_groups))}")
+        print(f"\n🎯 Generating timetable for all student groups")
+        print(f"   Student Groups: {len(student_groups)}")
+        print(f"   Semesters: {len(set(sg.semester for sg in student_groups))}")
         
         # Generate timetables for all groups
         all_assignments = []
         
-        for i, student_group in enumerate(batch_groups, 1):
-            print(f"\n[{i}/{len(batch_groups)}] Processing...")
+        for i, student_group in enumerate(student_groups, 1):
+            print(f"\n[{i}/{len(student_groups)}] Processing...")
             group_assignments = generate_timetable_for_group(
                 student_group, courses, lecturers, rooms, all_assignments
             )
@@ -364,7 +350,7 @@ def main():
         # Export complete timetable
         if all_assignments:
             export_full_timetable(all_assignments, courses, lecturers, rooms,
-                                filename=f'TIMETABLE_{target_batch}_COMPLETE.csv')
+                                filename='TIMETABLE_UNIVERSITY_COMPLETE.csv')
         else:
             print("\n❌ No assignments generated!")
         
@@ -379,11 +365,11 @@ def main():
         print("="*70)
         print(f"\n📊 Statistics:")
         print(f"   • Total Sessions: {len(all_assignments)}")
-        print(f"   • Student Groups: {len(batch_groups)}")
+        print(f"   • Student Groups: {len(student_groups)}")
         print(f"   • Time Elapsed: {elapsed:.2f} seconds")
         print(f"\n📁 Output Files:")
-        print(f"   • TIMETABLE_{target_batch}_COMPLETE.csv")
-        print(f"   • TIMETABLE_{target_batch}_COMPLETE_SUMMARY.txt")
+        print(f"   • TIMETABLE_UNIVERSITY_COMPLETE.csv")
+        print(f"   • TIMETABLE_UNIVERSITY_COMPLETE_SUMMARY.txt")
         print(f"\n🎉 University timetable successfully generated!")
         print("="*70 + "\n")
         

@@ -33,14 +33,12 @@ def setup_database():
     db = client['timetable_scheduler']
     return client, db
 
-def fetch_all_data(db, batch_filter=None):
-    """Fetch all data from database, optionally filtered by batch"""
+def fetch_all_data(db):
+    """Fetch all data from database"""
     print("\n📥 Loading university data...")
     
-    # Load student groups
+    # Load student groups (batch is stored but not used for filtering)
     query = {'is_active': True}
-    if batch_filter:
-        query['batch'] = batch_filter
     student_groups_data = list(db.student_groups.find(query))
     student_groups = [StudentGroup.from_dict(sg) for sg in student_groups_data]
     
@@ -110,13 +108,12 @@ def get_term_courses_for_group(student_group, courses, term_number):
                 return group_courses
             return []
 
-def generate_term_timetable(term_number, batch_filter=None):
+def generate_term_timetable(term_number):
     """
     Generate timetable for a specific term across ALL semesters
     
     Args:
         term_number: 1 for Term1, 2 for Term2
-        batch_filter: Optional batch name to filter student groups (e.g., 'BSCAIT-126')
     """
     start_time = datetime.now()
     
@@ -124,8 +121,6 @@ def generate_term_timetable(term_number, batch_filter=None):
     print(f"          TERM {term_number} TIMETABLE GENERATION")
     print("="*70)
     print(f"\n🎯 Generating timetable for: TERM {term_number}")
-    if batch_filter:
-        print(f"   Batch Filter: {batch_filter}")
     print(f"   Scope: ALL semesters (S1-S6)")
     print(f"   All programs share the same academic terms\n")
     
@@ -134,7 +129,7 @@ def generate_term_timetable(term_number, batch_filter=None):
         client, db = setup_database()
         
         # Load all data
-        student_groups, courses, lecturers, rooms = fetch_all_data(db, batch_filter)
+        student_groups, courses, lecturers, rooms = fetch_all_data(db)
         
         if not student_groups:
             print("❌ No student groups found!")
@@ -201,12 +196,17 @@ def generate_term_timetable(term_number, batch_filter=None):
         csp_solution = csp_engine.solve()
         
         if not csp_solution:
-            print("   ❌ CSP failed to find a solution!")
+            print("   ❌ CSP failed to find any assignments!")
             print("   This may indicate resource constraints (rooms, lecturers, time slots)")
             client.close()
             return
         
-        print(f"   ✅ CSP Solution: {len(csp_solution)} sessions scheduled")
+        total_sessions = len(csp_engine.variables)
+        if len(csp_solution) < total_sessions:
+            print(f"   ⚠️  CSP Partial Solution: {len(csp_solution)}/{total_sessions} sessions scheduled")
+            print(f"   💡 GGA will attempt to complete the remaining {total_sessions - len(csp_solution)} sessions")
+        else:
+            print(f"   ✅ CSP Complete Solution: {len(csp_solution)} sessions scheduled")
         
         # Step 2: Convert CSP solution to Chromosome for GGA
         from app.services.gga.chromosome import Chromosome, Gene
@@ -275,7 +275,6 @@ def generate_term_timetable(term_number, batch_filter=None):
                 'session_id': gene.session_id,
                 'student_group_id': gene.student_group_id,
                 'student_group_name': sg.display_name,
-                'batch': sg.batch,
                 'semester': sg.semester,
                 'term': f'Term{term_number}',
                 'group_size': sg.size,
@@ -289,8 +288,7 @@ def generate_term_timetable(term_number, batch_filter=None):
         
         
         # Export
-        batch_suffix = f"_{batch_filter}" if batch_filter else ""
-        filename = f'TIMETABLE_TERM{term_number}{batch_suffix}_COMPLETE.csv'
+        filename = f'TIMETABLE_TERM{term_number}_COMPLETE.csv'
         export_to_csv(assignment_dicts, courses, lecturers, rooms, filename, term_number)
         
         # Generate statistics
@@ -330,7 +328,7 @@ def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number)
         "Course_Code", "Course_Name", "Course_Type", "Credits",
         "Lecturer_ID", "Lecturer_Name", "Lecturer_Role",
         "Room_Number", "Room_Type", "Room_Capacity", "Room_Building", "Room_Campus",
-        "Student_Group", "Batch", "Semester", "Term", "Group_Size"
+        "Student_Group", "Semester", "Term", "Group_Size"
     ]
     
     # Handle file permission errors (file might be open in Excel)
@@ -370,7 +368,6 @@ def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number)
                     "Room_Building": room.building,
                     "Room_Campus": getattr(room, 'campus', 'N/A'),
                     "Student_Group": assignment['student_group_name'],
-                    "Batch": assignment['batch'],
                     "Semester": assignment['semester'],
                     "Term": f"Term{term_number}",
                     "Group_Size": assignment['group_size']
@@ -411,8 +408,7 @@ def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number)
                         "Room_Capacity": room.capacity if room else 0,
                         "Room_Building": room.building if room else "N/A",
                         "Room_Campus": getattr(room, 'campus', 'N/A') if room else "N/A",
-                        "Student_Group": assignment['student_group'],
-                        "Batch": assignment['batch'],
+                        "Student_Group": assignment['student_group_name'],
                         "Semester": assignment['semester'],
                         "Term": f"Term{term_number}",
                         "Group_Size": assignment['group_size']
@@ -428,7 +424,6 @@ def generate_statistics(assignments, courses, lecturers, rooms, csv_filename, te
     """Generate comprehensive statistics"""
     
     # Group by various dimensions
-    by_batch = defaultdict(int)
     by_semester = defaultdict(int)
     by_day = defaultdict(int)
     by_course = defaultdict(int)
@@ -436,7 +431,6 @@ def generate_statistics(assignments, courses, lecturers, rooms, csv_filename, te
     by_room = defaultdict(int)
     
     for assignment in assignments:
-        by_batch[assignment['batch']] += 1
         by_semester[assignment['semester']] += 1
         by_day[assignment['day']] += 1
         by_course[assignment['course_id']] += 1
@@ -456,12 +450,6 @@ def generate_statistics(assignments, courses, lecturers, rooms, csv_filename, te
         f.write(f"Total Sessions: {len(assignments)}\n\n")
         
         f.write("="*70 + "\n")
-        f.write("SESSIONS BY BATCH\n")
-        f.write("="*70 + "\n")
-        for batch, count in sorted(by_batch.items()):
-            f.write(f"  {batch}: {count} sessions\n")
-        
-        f.write("\n" + "="*70 + "\n")
         f.write("SESSIONS BY SEMESTER\n")
         f.write("="*70 + "\n")
         for sem, count in sorted(by_semester.items()):
@@ -512,11 +500,11 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Generate Term1 timetable for all batches
+  # Generate Term1 timetable
   python generate_term_timetable.py --term 1
   
-  # Generate Term2 timetable for specific batch
-  python generate_term_timetable.py --term 2 --batch BSCAIT-126
+  # Generate Term2 timetable
+  python generate_term_timetable.py --term 2
   
   # Generate Term1 timetable (interactive)
   python generate_term_timetable.py
@@ -528,12 +516,6 @@ Examples:
         type=int,
         choices=[1, 2],
         help='Term number (1 or 2)'
-    )
-    
-    parser.add_argument(
-        '--batch',
-        type=str,
-        help='Optional: Filter by batch name (e.g., BSCAIT-126)'
     )
     
     args = parser.parse_args()
@@ -564,7 +546,7 @@ Examples:
         term_number = args.term
     
     # Generate timetable
-    generate_term_timetable(term_number, args.batch)
+    generate_term_timetable(term_number)
 
 if __name__ == '__main__':
     main()

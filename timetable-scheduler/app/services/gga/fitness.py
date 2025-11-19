@@ -1,6 +1,6 @@
 ﻿"""Fitness evaluation for Guided Genetic Algorithm."""
 
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple
 from dataclasses import dataclass
 import statistics
 
@@ -14,6 +14,8 @@ class FitnessScore:
     room_utilization: float
     weekday_distribution: float
     breakdown: 'FitnessBreakdown'
+    violation_penalty: float = 0.0  # Penalty for hard constraint violations
+    violation_count: int = 0  # Number of hard constraint violations
 
 
 @dataclass
@@ -111,13 +113,19 @@ class FitnessEvaluator:
         room_score = self._evaluate_room_utilization(chromosome_dict, breakdown)
         distribution_score = self._evaluate_weekday_distribution(chromosome_dict, breakdown)
         
-        # Calculate weighted overall fitness
-        overall = (
+        # Calculate violation penalty (CRITICAL: Heavily penalize hard constraint violations)
+        violation_penalty, violation_count = self._evaluate_violations(chromosome)
+        
+        # Calculate weighted overall fitness (subtract violation penalty)
+        soft_constraint_fitness = (
             self.weights['student_idle_time'] * student_score +
             self.weights['lecturer_workload_balance'] * lecturer_score +
             self.weights['room_utilization'] * room_score +
             self.weights['weekday_distribution'] * distribution_score
         )
+        
+        # Apply violation penalty (can make fitness negative if too many violations)
+        overall = max(0.0, soft_constraint_fitness - violation_penalty)
         
         return FitnessScore(
             overall_fitness=overall,
@@ -125,7 +133,9 @@ class FitnessEvaluator:
             lecturer_workload_balance=lecturer_score,
             room_utilization=room_score,
             weekday_distribution=distribution_score,
-            breakdown=breakdown
+            breakdown=breakdown,
+            violation_penalty=violation_penalty,
+            violation_count=violation_count
         )
     
     def _evaluate_student_idle_time(self, chromosome: Dict[str, Any], 
@@ -450,6 +460,105 @@ class FitnessEvaluator:
             'course_units': self.course_units,
             'student_groups': self.student_groups
         }
+    
+    def _evaluate_violations(self, chromosome) -> Tuple[float, int]:
+        """
+        Evaluate hard constraint violations and calculate penalty
+        
+        Returns:
+            (penalty, violation_count) tuple
+        """
+        from app.services.csp.constraints import ConstraintContext, ConstraintChecker, ConstraintType
+        from app.services.gga.chromosome import Gene
+        
+        # Build constraint context
+        context = ConstraintContext()
+        context.lecturers = {lid: self._lecturer_to_dict(l) for lid, l in self.lecturers.items()}
+        context.rooms = {rid: self._room_to_dict(r) for rid, r in self.rooms.items()}
+        context.course_units = {cid: self._course_to_dict(c) for cid, c in self.course_units.items()}
+        context.student_groups = {gid: self._group_to_dict(g) for gid, g in self.student_groups.items()}
+        
+        constraint_checker = ConstraintChecker()
+        total_violations = 0
+        critical_violations = 0  # Double-booking, capacity
+        
+        # Check each assignment
+        for gene in chromosome.genes:
+            assignment = gene.to_assignment()
+            is_valid, violations = constraint_checker.check_all(assignment, context)
+            
+            if not is_valid:
+                total_violations += len(violations)
+                
+                # Check for critical violations (double-booking, capacity)
+                if not constraint_checker.check_constraint(ConstraintType.NO_DOUBLE_BOOKING, assignment, context):
+                    critical_violations += 1
+                if not constraint_checker.check_constraint(ConstraintType.ROOM_CAPACITY, assignment, context):
+                    critical_violations += 1
+            
+            context.add_assignment(assignment)
+        
+        # Calculate penalty: Penalty that allows evolution but strongly encourages fixing violations
+        # Critical violations: -0.5 each (double-booking, capacity) - very bad, should never happen
+        # Limit violations: -0.02 each (weekly/daily limits) - bad but fixable
+        # Penalty is subtracted from soft constraint fitness (typically 0.6-0.8)
+        # With 25 violations: 25 * 0.02 = 0.5 penalty, leaving room for fitness > 0
+        # This ensures GGA prioritizes fixing violations while still allowing exploration
+        penalty = (critical_violations * 0.5) + ((total_violations - critical_violations) * 0.02)
+        
+        return penalty, total_violations
+    
+    def _lecturer_to_dict(self, lecturer) -> dict:
+        """Convert lecturer to dict for constraint context"""
+        if hasattr(lecturer, 'to_dict'):
+            return lecturer.to_dict()
+        elif isinstance(lecturer, dict):
+            return lecturer
+        else:
+            return {
+                'id': getattr(lecturer, 'id', ''),
+                'name': getattr(lecturer, 'name', ''),
+                'role': getattr(lecturer, 'role', 'Full-Time'),
+                'max_weekly_hours': getattr(lecturer, 'max_weekly_hours', 22),
+                'specializations': getattr(lecturer, 'specializations', [])
+            }
+    
+    def _room_to_dict(self, room) -> dict:
+        """Convert room to dict for constraint context"""
+        if hasattr(room, 'to_dict'):
+            return room.to_dict()
+        elif isinstance(room, dict):
+            return room
+        else:
+            return {
+                'id': getattr(room, 'id', ''),
+                'capacity': getattr(room, 'capacity', 0),
+                'room_type': getattr(room, 'room_type', 'Classroom')
+            }
+    
+    def _course_to_dict(self, course) -> dict:
+        """Convert course to dict for constraint context"""
+        if hasattr(course, 'to_dict'):
+            return course.to_dict()
+        elif isinstance(course, dict):
+            return course
+        else:
+            return {
+                'id': getattr(course, 'id', ''),
+                'is_lab': getattr(course, 'is_lab', False)
+            }
+    
+    def _group_to_dict(self, group) -> dict:
+        """Convert student group to dict for constraint context"""
+        if hasattr(group, 'to_dict'):
+            return group.to_dict()
+        elif isinstance(group, dict):
+            return group
+        else:
+            return {
+                'id': getattr(group, 'id', ''),
+                'size': getattr(group, 'size', 0)
+            }
     
     @staticmethod
     def _time_to_minutes(time_str: str) -> int:

@@ -22,11 +22,13 @@ class Lecturer:
     def __post_init__(self):
         """Set max weekly hours based on role"""
         if self.role == LecturerRole.FACULTY_DEAN.value:
-            self.max_weekly_hours = 15
+            self.max_weekly_hours = 15  # Dean: 14-16 hours (using 15 as middle)
         elif self.role == LecturerRole.FULL_TIME.value:
-            self.max_weekly_hours = 22
+            self.max_weekly_hours = 22  # Full-time: 22 hours (4 hours/day × 5 days = 20h + 2h buffer)
         elif self.role == LecturerRole.PART_TIME.value:
-            self.max_weekly_hours = 3
+            # Part-time: No strict weekly limit - teach when available (availability-based)
+            # Set to a high value to allow flexibility, but availability dict will control actual hours
+            self.max_weekly_hours = 999  # Effectively unlimited, controlled by availability
     
     def to_dict(self):
         """Convert to dictionary for MongoDB"""

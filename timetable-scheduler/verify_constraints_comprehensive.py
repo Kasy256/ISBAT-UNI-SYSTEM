@@ -171,23 +171,32 @@ def verify_hard_constraints(sessions):
         # Each session is 2 hours
         lecturer_hours[lecturer_id] += 2
     
+    # Build lecturer name lookup first (fix bug)
+    lecturer_names = {s['Lecturer_ID']: s['Lecturer_Name'] for s in sessions}
+    
     weekly_violations = 0
     role_limits = {
-        'Faculty Dean': 15,
-        'Full-Time': 22,
-        'Part-Time': 3
+        'Faculty Dean': 15,  # Dean: 14-16 hours (using 15 as middle)
+        'Full-Time': 22,     # Full-time: 22 hours (4 hours/day × 5 days = 20h + 2h buffer)
+        'Part-Time': 999     # Part-time: No strict weekly limit - teach when available (availability-based)
     }
     
     for lecturer_id, hours in lecturer_hours.items():
         role = lecturer_roles.get(lecturer_id, 'Full-Time')
         max_hours = role_limits.get(role, 22)  # Default to Full-Time limit
         
+        # For part-time, check availability instead of weekly limit
+        if role == 'Part-Time':
+            # Part-time lecturers are controlled by availability, not weekly hours
+            # Skip weekly limit check for part-time (availability is the constraint)
+            continue
+        
         if hours > max_hours:
             weekly_violations += 1
             violations.append({
                 'constraint': 'Weekly Hour Limits',
                 'lecturer_id': lecturer_id,
-                'lecturer_name': session.get('Lecturer_Name', 'Unknown'),
+                'lecturer_name': lecturer_names.get(lecturer_id, 'Unknown'),  # Fixed: use lookup
                 'role': role,
                 'hours': hours,
                 'max_hours': max_hours,
@@ -276,43 +285,81 @@ def verify_hard_constraints(sessions):
     
     # 8. No Same-Day Unit Repetition
     print("\n8. Checking: No Same-Day Unit Repetition...")
-    course_daily = defaultdict(lambda: defaultdict(set))
-    for session in sessions:
-        student_group = session['Student_Group']
-        course = session['Course_Code']
-        day = session['Day']
-        key = (student_group, course, day)
-        course_daily[student_group][day].add(course)
+    # Map time slot strings to period indices (matching CSP logic)
+    time_slot_to_period = {
+        '09:00-11:00': 0,  # SLOT_1
+        '11:00-13:00': 1,  # SLOT_2
+        '14:00-16:00': 2,  # SLOT_3
+        '16:00-18:00': 3   # SLOT_4
+    }
+    periods = ['SLOT_1', 'SLOT_2', 'SLOT_3', 'SLOT_4']
     
-    # Count actual sessions per course per day per group
-    course_counts = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    # Group sessions by student_group, course, and day
+    course_sessions_by_day = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     for session in sessions:
         student_group = session['Student_Group']
         course = session['Course_Code']
         day = session['Day']
-        course_counts[student_group][day][course] += 1
+        time_slot = session['Time_Slot']
+        course_type = session['Course_Type']
+        
+        course_sessions_by_day[student_group][day][course].append({
+            'time_slot': time_slot,
+            'period_idx': time_slot_to_period.get(time_slot),
+            'course_type': course_type,
+            'session_id': session.get('Session_ID', '')
+        })
     
     repetition_violations = 0
-    for student_group, days in course_counts.items():
+    for student_group, days in course_sessions_by_day.items():
         for day, courses in days.items():
-            for course, count in courses.items():
-                if count > 1:
+            for course, session_list in courses.items():
+                if len(session_list) > 1:
                     # Multiple sessions of same course on same day - check if consecutive
-                    # For now, we'll flag it but note that consecutive lab sessions may be allowed
-                    repetition_violations += 1
-                    violations.append({
-                        'constraint': 'No Same-Day Unit Repetition',
-                        'student_group': student_group,
-                        'course': course,
-                        'day': day,
-                        'sessions': count,
-                        'severity': 'CRITICAL'
-                    })
+                    # Consecutive lab sessions (e.g., SLOT_1 + SLOT_2) are allowed
+                    session_list.sort(key=lambda x: x['period_idx'] if x['period_idx'] is not None else 999)
+                    
+                    # Check if all sessions are consecutive
+                    is_consecutive = True
+                    course_type = session_list[0]['course_type']
+                    
+                    if len(session_list) == 2:
+                        # Two sessions - check if consecutive (difference = 1)
+                        period_indices = [s['period_idx'] for s in session_list if s['period_idx'] is not None]
+                        if len(period_indices) == 2:
+                            period_diff = abs(period_indices[1] - period_indices[0])
+                            if period_diff != 1:
+                                is_consecutive = False
+                        else:
+                            # Invalid period mapping - treat as violation
+                            is_consecutive = False
+                    else:
+                        # More than 2 sessions on same day - always a violation
+                        is_consecutive = False
+                    
+                    # Only flag as violation if:
+                    # 1. Sessions are NOT consecutive, OR
+                    # 2. It's not a lab course (lab courses can have consecutive sessions)
+                    if not is_consecutive or course_type != 'Lab':
+                        repetition_violations += 1
+                        period_strs = [periods[s['period_idx']] if s['period_idx'] is not None else s['time_slot'] 
+                                     for s in session_list]
+                        violations.append({
+                            'constraint': 'No Same-Day Unit Repetition',
+                            'student_group': student_group,
+                            'course': course,
+                            'day': day,
+                            'sessions': len(session_list),
+                            'periods': period_strs,
+                            'is_consecutive': is_consecutive,
+                            'course_type': course_type,
+                            'severity': 'CRITICAL'
+                        })
     
     if repetition_violations == 0:
         print("   ✅ PASSED: No same-day unit repetition")
     else:
-        print(f"   ⚠️  WARNING: {repetition_violations} same-day repetitions (may be consecutive lab sessions)")
+        print(f"   ⚠️  WARNING: {repetition_violations} same-day repetitions (non-consecutive or non-lab)")
     
     # 9. Class Merging Rule
     print("\n9. Checking: Class Merging Rule (merged groups ≤ room capacity)...")

@@ -76,6 +76,7 @@ class SchedulingVariable:
     available_time_slots: Set[TimeSlot] = field(default_factory=set)
     available_lecturers: Set[str] = field(default_factory=set)
     available_rooms: Set[str] = field(default_factory=set)
+    lecturer_time_slots: Dict[str, Set[TimeSlot]] = field(default_factory=dict)  # lecturer_id -> available time slots
     
     # Current assignment
     assignment: Optional[Assignment] = None
@@ -84,7 +85,9 @@ class SchedulingVariable:
         return self.assignment is not None
     
     def domain_size(self) -> int:
-        """Calculate total domain size"""
+        """Calculate total domain size (approximate - doesn't account for lecturer_time_slots filtering)"""
+        # Note: This is an approximation. For accurate size, use the calculation in CSPEngine._select_unassigned_variable
+        # that accounts for lecturer_time_slots filtering
         return len(self.available_time_slots) * len(self.available_lecturers) * len(self.available_rooms)
 
 class DomainManager:
@@ -114,11 +117,70 @@ class DomainManager:
         # All time slots initially available
         variable.available_time_slots = self.all_time_slots.copy()
         
-        # Find qualified lecturers
-        variable.available_lecturers = set(
-            lec.id for lec in lecturers 
+        # Find qualified lecturers (by specialization)
+        qualified_lecturers = [
+            lec for lec in lecturers 
             if course_unit.id in lec.specializations
-        )
+        ]
+        
+        # Build lecturer-to-time-slot mapping based on availability
+        # For part-time lecturers, filter time slots to only their available days/hours
+        lecturer_time_slots = {}  # lecturer_id -> set of available time slots
+        
+        for lec in qualified_lecturers:
+            if lec.availability:
+                # Part-time lecturer with availability restrictions
+                # Only available on days specified in availability dict
+                available_slots = set()
+                for time_slot in self.all_time_slots:
+                    # Check if lecturer is available on this day
+                    if time_slot.day not in lec.availability:
+                        # Day not in availability dict - lecturer not available on this day
+                        continue
+                    
+                    day_availability = lec.availability[time_slot.day]
+                    
+                    # If empty list, lecturer available all day (unlikely for part-time, but handle it)
+                    if len(day_availability) == 0:
+                        available_slots.add(time_slot)
+                    else:
+                        # Check if time slot overlaps with any available time range
+                        # Time slot format: "09:00-11:00", availability format: "09:00-11:00" or "10:00-12:00"
+                        time_slot_str = f"{time_slot.start}-{time_slot.end}"
+                        if time_slot_str in day_availability:
+                            # Exact match
+                            available_slots.add(time_slot)
+                        else:
+                            # Check for overlap: time slot overlaps if it starts or ends within an available range
+                            slot_start = self._time_to_minutes(time_slot.start)
+                            slot_end = self._time_to_minutes(time_slot.end)
+                            
+                            for avail_range in day_availability:
+                                if '-' in avail_range:
+                                    avail_start_str, avail_end_str = avail_range.split('-')
+                                    avail_start = self._time_to_minutes(avail_start_str.strip())
+                                    avail_end = self._time_to_minutes(avail_end_str.strip())
+                                    
+                                    # Check if time slot overlaps with available range
+                                    # Overlap if: slot starts before range ends AND slot ends after range starts
+                                    if slot_start < avail_end and slot_end > avail_start:
+                                        available_slots.add(time_slot)
+                                        break
+                
+                lecturer_time_slots[lec.id] = available_slots
+            else:
+                # Full-time lecturer - available all time slots
+                lecturer_time_slots[lec.id] = self.all_time_slots.copy()
+        
+        # Only include lecturers who have at least one available time slot
+        # This filters out part-time lecturers whose availability doesn't match any time slots
+        available_lecturer_ids = set()
+        for lec_id, slots in lecturer_time_slots.items():
+            if len(slots) > 0:  # Lecturer has at least one available time slot
+                available_lecturer_ids.add(lec_id)
+        
+        variable.available_lecturers = available_lecturer_ids
+        variable.lecturer_time_slots = lecturer_time_slots  # Store for later filtering
         
         # Find suitable rooms (with capacity check)
         variable.available_rooms = set(
@@ -127,6 +189,14 @@ class DomainManager:
         )
         
         return variable
+    
+    def _time_to_minutes(self, time_str: str) -> int:
+        """Convert time string (HH:MM) to minutes since midnight"""
+        try:
+            parts = time_str.strip().split(':')
+            return int(parts[0]) * 60 + int(parts[1])
+        except:
+            return 0
     
     def _is_room_suitable(self, room, course_unit, student_group=None) -> bool:
         """Check if room is suitable for course unit"""

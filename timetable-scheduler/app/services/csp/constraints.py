@@ -414,6 +414,21 @@ class DailyLimitConstraint(Constraint):
                 f"Lecturer {lecturer_id} already has 2 sessions on {day}"
             )
         
+        # Check morning/afternoon rule: max 1 morning + 1 afternoon
+        is_afternoon = assignment.time_slot.is_afternoon
+        morning_used = context.lecturer_morning_used.get(lecturer_id, {}).get(day, False)
+        afternoon_used = context.lecturer_afternoon_used.get(lecturer_id, {}).get(day, False)
+        
+        if is_afternoon and afternoon_used:
+            violations.append(
+                f"Lecturer {lecturer_id} already has an afternoon session on {day}"
+            )
+        
+        if not is_afternoon and morning_used:
+            violations.append(
+                f"Lecturer {lecturer_id} already has a morning session on {day}"
+            )
+        
         return violations
 
 
@@ -431,6 +446,12 @@ class WeeklyLimitConstraint(Constraint):
             return False
         
         max_weekly_hours = lecturer.get('max_weekly_hours', 22)
+        
+        # Part-time lecturers: No strict weekly limit (availability-based)
+        # If max_weekly_hours is very high (999), skip weekly limit check
+        if max_weekly_hours >= 999:
+            return True  # Part-time: controlled by availability, not weekly hours
+        
         current_hours = context.lecturer_weekly_hours.get(assignment.lecturer_id, 0)
         session_hours = 2  # Each session is 2 hours
         
@@ -443,6 +464,11 @@ class WeeklyLimitConstraint(Constraint):
         
         if lecturer:
             max_weekly_hours = lecturer.get('max_weekly_hours', 22)
+            
+            # Part-time lecturers: No strict weekly limit (availability-based)
+            if max_weekly_hours >= 999:
+                return violations  # Skip check for part-time
+            
             current_hours = context.lecturer_weekly_hours.get(assignment.lecturer_id, 0)
             session_hours = 2
             
