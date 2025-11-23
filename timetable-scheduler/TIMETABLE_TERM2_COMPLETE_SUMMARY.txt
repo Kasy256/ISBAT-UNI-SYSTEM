@@ -1,0 +1,68 @@
+======================================================================
+          TERM 2 TIMETABLE - COMPREHENSIVE SUMMARY
+======================================================================
+
+Generated: 2025-11-24 00:07:01
+Term: Term 2
+Total Sessions: 52
+
+======================================================================
+SESSIONS BY SEMESTER
+======================================================================
+  S1: 8 sessions
+  S2: 8 sessions
+  S3: 10 sessions
+  S4: 10 sessions
+  S5: 8 sessions
+  S6: 8 sessions
+
+======================================================================
+SESSIONS BY DAY
+======================================================================
+  MON: 12 sessions
+  TUE: 11 sessions
+  WED: 8 sessions
+  THU: 10 sessions
+  FRI: 11 sessions
+
+======================================================================
+TOP 10 COURSES (by sessions)
+======================================================================
+  BIT1101 - Fundamentals of Computer and Office Applications -: 4 sessions
+  BIT1212 - Database Management System: 4 sessions
+  BIT1209 - Fundamentals of Digital Systems: 4 sessions
+  BIT2119 - Graphics and Multimedia Systems: 4 sessions
+  BIT2223 - Artificial Intelligence: 4 sessions
+  BIT2225 - Virtualization and Cloud Computing: 4 sessions
+  BIT3131 - Mobile Application Development Using Android Technology: 4 sessions
+  BIT1104 - Soft Skills Development: 4 sessions
+  BCS2113 - Introduction to Cyber Security: 2 sessions
+  BCS2222 - Data Science Algorithms and Tools: 2 sessions
+
+======================================================================
+TOP 10 LECTURERS (by sessions)
+======================================================================
+  HENRY MALE KENNETH: 6 sessions
+  KENNETH KATO: 4 sessions
+  KUKUTLA ALEKYA: 4 sessions
+  PETER MUHUMUZA: 4 sessions
+  KUMAR THILAK DEVARAJ: 4 sessions
+  JUSTIN OPOLOT: 4 sessions
+  BRAVE AFRICANO: 4 sessions
+  AINEMBABAZI PAMELA: 4 sessions
+  SOLOMON MUGISA: 2 sessions
+  MARIA CHEN: 2 sessions
+
+======================================================================
+TOP 10 ROOMS (by usage)
+======================================================================
+  601 (Lab): 24 sessions
+  206 (Lab): 11 sessions
+  504 (Theory): 7 sessions
+  700 (Theory): 4 sessions
+  505 (Lab): 3 sessions
+  204 (Lab): 1 sessions
+  203 (Lab): 1 sessions
+  305 (Theory): 1 sessions
+
+======================================================================

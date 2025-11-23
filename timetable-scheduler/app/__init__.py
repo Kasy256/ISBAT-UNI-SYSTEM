@@ -27,9 +27,10 @@ def create_app(config_class=Config):
     db.course_units.create_index('id', unique=True)
     db.student_groups.create_index('id', unique=True)
     db.timetables.create_index('created_at')
+    db.canonical_course_groups.create_index('canonical_id', unique=True)
     
     # Register blueprints
-    from app.api.routes import lecturers, rooms, courses, students, timetable, auth, validation
+    from app.api.routes import lecturers, rooms, courses, students, timetable, auth, validation, canonical_groups
     
     app.register_blueprint(auth.bp)
     app.register_blueprint(lecturers.bp)
@@ -38,6 +39,7 @@ def create_app(config_class=Config):
     app.register_blueprint(students.bp)
     app.register_blueprint(timetable.bp)
     app.register_blueprint(validation.bp)
+    app.register_blueprint(canonical_groups.bp)
     
     # Health check endpoint
     @app.route('/health')

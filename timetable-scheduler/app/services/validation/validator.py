@@ -236,7 +236,7 @@ class TimetableValidator:
             
             # Check room type
             total += 1
-            valid_types = ["Classroom", "Lab"]
+            valid_types = ["Theory", "Lab"]
             if room.room_type not in valid_types:
                 critical.append(ValidationError(
                     code="ROOM_INVALID_TYPE",
@@ -481,7 +481,7 @@ class TimetableValidator:
             passed += 1
         
         # Check lab availability
-        lab_courses = [cu for cu in course_units if cu.is_lab]
+        lab_courses = [cu for cu in course_units if cu.preferred_room_type == "Lab"]
         lab_rooms = [r for r in rooms if r.room_type == "Lab"]
         
         total += 1

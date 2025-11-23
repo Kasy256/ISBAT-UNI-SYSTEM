@@ -114,13 +114,16 @@ class DomainManager:
                                     lecturers: List, rooms: List, 
                                     course_unit, student_group=None) -> SchedulingVariable:
         """Initialize domains for a variable"""
+        self.rooms = {room.id: room for room in rooms}
         # All time slots initially available
         variable.available_time_slots = self.all_time_slots.copy()
         
-        # Find qualified lecturers (by specialization)
+        # Find qualified lecturers (by specialization using canonical matching)
+        from app.services.canonical_courses import is_canonical_match
+        
         qualified_lecturers = [
             lec for lec in lecturers 
-            if course_unit.id in lec.specializations
+            if is_canonical_match(course_unit.id, lec.specializations)
         ]
         
         # Build lecturer-to-time-slot mapping based on availability
@@ -199,17 +202,24 @@ class DomainManager:
             return 0
     
     def _is_room_suitable(self, room, course_unit, student_group=None) -> bool:
-        """Check if room is suitable for course unit"""
-        # Check room type
-        if course_unit.is_lab and room.room_type != "Lab":
-            return False
+        """Check if room is suitable for course unit
         
-        # Check room capacity (CRITICAL: filter out rooms that are too small)
-        if student_group and hasattr(student_group, 'size'):
-            if room.capacity < student_group.size:
-                return False
+        IMPORTANT: We only check room TYPE here, not capacity.
+        Capacity is checked during constraint validation, which allows the CSP
+        solver to try different time slots when rooms aren't available.
         
-        return True
+        This enables the system to:
+        1. Try all rooms of the correct type
+        2. Check capacity during assignment (when we know the time slot)
+        3. Backtrack and try different time slots if capacity fails
+        """
+        # Get required room type directly from preferred_room_type
+        required_room_type = getattr(course_unit, 'preferred_room_type', 'Theory')
+        
+        # STRICT: Room type must match course type
+        # Lab courses MUST use Lab rooms, Theory courses MUST use Theory rooms
+        # Capacity will be checked by RoomCapacityConstraint during assignment
+        return room.room_type == required_room_type
     
     def filter_domain(self, variable: SchedulingVariable, 
                      constraint_type: str, 
@@ -217,11 +227,9 @@ class DomainManager:
         """Filter domain based on constraint"""
         
         if constraint_type == "TIME_SLOT":
-            # Remove conflicting time slots
             variable.available_time_slots.discard(conflict_data['time_slot'])
         
         elif constraint_type == "LECTURER":
-            # Remove unavailable lecturer
             variable.available_lecturers.discard(conflict_data['lecturer_id'])
         
         elif constraint_type == "ROOM":

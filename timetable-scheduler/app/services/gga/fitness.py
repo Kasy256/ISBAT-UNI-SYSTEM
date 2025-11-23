@@ -68,10 +68,11 @@ class FitnessEvaluator:
         self.rooms = rooms or {}
         
         self.weights = config or {
-            'student_idle_time': 0.30,
+            'student_idle_time': 0.25,
             'lecturer_workload_balance': 0.25,
             'room_utilization': 0.15,
-            'weekday_distribution': 0.30  # Increased from 0.15 to 0.30 for better balance
+            'weekday_distribution': 0.25,
+            'time_slot_preference': 0.10
         }
     
     def evaluate(self, chromosome) -> FitnessScore:
@@ -102,16 +103,25 @@ class FitnessEvaluator:
                     'term': gene.term,
                     'session_number': gene.session_number
                 })
-            chromosome_dict = {'sessions': sessions}
+            chromosome_dict = {
+                'sessions': sessions,
+                'student_groups': {gid: self._group_to_dict(g) for gid, g in self.student_groups.items()},
+                'course_units': {cid: self._course_to_dict(c) for cid, c in self.course_units.items()}
+            }
         else:
             # Already a dict
             chromosome_dict = chromosome if 'sessions' in chromosome else {'sessions': []}
+            if 'student_groups' not in chromosome_dict:
+                chromosome_dict['student_groups'] = {gid: self._group_to_dict(g) for gid, g in self.student_groups.items()}
+            if 'course_units' not in chromosome_dict:
+                chromosome_dict['course_units'] = {cid: self._course_to_dict(c) for cid, c in self.course_units.items()}
         
         # Evaluate each component
         student_score = self._evaluate_student_idle_time(chromosome_dict, breakdown)
         lecturer_score = self._evaluate_lecturer_workload_balance(chromosome_dict, breakdown)
         room_score = self._evaluate_room_utilization(chromosome_dict, breakdown)
         distribution_score = self._evaluate_weekday_distribution(chromosome_dict, breakdown)
+        time_slot_score = self._evaluate_time_slot_preference(chromosome_dict, breakdown)
         
         # Calculate violation penalty (CRITICAL: Heavily penalize hard constraint violations)
         violation_penalty, violation_count = self._evaluate_violations(chromosome)
@@ -121,7 +131,8 @@ class FitnessEvaluator:
             self.weights['student_idle_time'] * student_score +
             self.weights['lecturer_workload_balance'] * lecturer_score +
             self.weights['room_utilization'] * room_score +
-            self.weights['weekday_distribution'] * distribution_score
+            self.weights['weekday_distribution'] * distribution_score +
+            self.weights.get('time_slot_preference', 0.10) * time_slot_score
         )
         
         # Apply violation penalty (can make fitness negative if too many violations)
@@ -221,6 +232,54 @@ class FitnessEvaluator:
             breakdown.avg_daily_span /= total_days
         
         return total_idle_score / max(total_days, 1)
+    
+    def _evaluate_time_slot_preference(self, chromosome: Dict[str, Any],
+                                      breakdown: FitnessBreakdown) -> float:
+        """
+        Evaluate time slot preferences (prefer morning/afternoon over 4-6 PM, especially for S1)
+        
+        Higher score = better time slot distribution (better)
+        """
+        sessions = chromosome.get('sessions', [])
+        student_groups = chromosome.get('student_groups', {})
+        
+        total_score = 0.0
+        total_groups = 0
+        
+        # Group sessions by student group
+        group_sessions = {}
+        for session in sessions:
+            group_id = session.get('student_group_id', '')
+            if group_id not in group_sessions:
+                group_sessions[group_id] = []
+            group_sessions[group_id].append(session)
+        
+        for group_id, group_sess in group_sessions.items():
+            group_info = student_groups.get(group_id, {})
+            semester = group_info.get('semester', '')
+            is_s1 = 'S1' in semester
+            
+            slot_penalties = 0
+            total_sessions = len(group_sess)
+            
+            for session in group_sess:
+                time_slot = session.get('time_slot', {})
+                period = time_slot.get('period', '')
+                start = time_slot.get('start', '')
+                
+                # Penalize 4-6 PM slots (SLOT_4, 16:00-18:00)
+                if period == 'SLOT_4' or start == '16:00':
+                    if is_s1:
+                        slot_penalties += 0.3
+                    else:
+                        slot_penalties += 0.15
+            
+            if total_sessions > 0:
+                slot_score = 1.0 - (slot_penalties / total_sessions)
+                total_score += max(slot_score, 0.0)
+                total_groups += 1
+        
+        return total_score / max(total_groups, 1)
     
     def _evaluate_lecturer_workload_balance(self, chromosome: Dict[str, Any],
                                            breakdown: FitnessBreakdown) -> float:
@@ -385,9 +444,11 @@ class FitnessEvaluator:
         # Perfect distribution (CV=0) = 1.0, Poor distribution (CV>0.5) = <0.5
         distribution_score = 1.0 / (1.0 + cv * 2.0)
         
-        # Strong penalty for empty days
-        if empty_days > 0:
-            distribution_score *= (1.0 - 0.25 * empty_days)  # Increased from 0.15
+        # Reward having at least 1 free day (preferred for students)
+        if empty_days >= 1:
+            distribution_score *= 1.1
+        elif empty_days == 0:
+            distribution_score *= 0.85
         
         # Strong penalty for high variance
         if variance > avg_load:  # Variance > average means very uneven
@@ -434,10 +495,10 @@ class FitnessEvaluator:
             else:
                 group_size = student_group.get('size', 0) if isinstance(student_group, dict) else 0
             
-            if hasattr(course_unit, 'is_lab'):
-                is_lab = course_unit.is_lab
+            if hasattr(course_unit, 'preferred_room_type'):
+                preferred_room_type = course_unit.preferred_room_type
             else:
-                is_lab = course_unit.get('is_lab', False) if isinstance(course_unit, dict) else False
+                preferred_room_type = course_unit.get('preferred_room_type', 'Theory') if isinstance(course_unit, dict) else 'Theory'
             
             session = {
                 'session_id': gene.session_id,
@@ -449,7 +510,7 @@ class FitnessEvaluator:
                 'term': gene.term,
                 'session_number': gene.session_number,
                 'student_group_size': group_size,
-                'course_is_lab': is_lab
+                'course_preferred_room_type': preferred_room_type
             }
             sessions.append(session)
         
@@ -533,7 +594,7 @@ class FitnessEvaluator:
             return {
                 'id': getattr(room, 'id', ''),
                 'capacity': getattr(room, 'capacity', 0),
-                'room_type': getattr(room, 'room_type', 'Classroom')
+                'room_type': getattr(room, 'room_type', 'Theory')
             }
     
     def _course_to_dict(self, course) -> dict:
@@ -545,7 +606,7 @@ class FitnessEvaluator:
         else:
             return {
                 'id': getattr(course, 'id', ''),
-                'is_lab': getattr(course, 'is_lab', False)
+                'preferred_room_type': getattr(course, 'preferred_room_type', 'Theory')
             }
     
     def _group_to_dict(self, group) -> dict:

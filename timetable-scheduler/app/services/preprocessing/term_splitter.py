@@ -1,5 +1,5 @@
 ﻿import math
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 from app.models.course import CourseUnit
 
@@ -29,97 +29,309 @@ class SplitScore:
     term2_score: float
     reasoning: List[str]
 
+def _normalize_term_value(value) -> int:
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if text in {'term1', 'term 1', '1'}:
+        return 1
+    if text in {'term2', 'term 2', '2'}:
+        return 2
+    return None
+
+
 class TermSplitter:
-    """Intelligent term splitting system"""
+    """Intelligent term splitting system with flexible unit count support"""
     
     def __init__(self):
-        self.split_ratios = {
-            'S1': TermSplitRatio('S1', '3:2', 3, 2),
-            'S2': TermSplitRatio('S2', '2:3', 2, 3),
-            'S3': TermSplitRatio('S3', '4:4', 4, 4),
-            'S4': TermSplitRatio('S4', '3:2', 3, 2),
-            'S5': TermSplitRatio('S5', '2:3', 2, 3),
-            'S6': TermSplitRatio('S6', '4:4', 4, 4)
+        # Default term split ratios for BIT and BCS programs (Computing Faculty):
+        # S1-S5: 5 units per semester
+        # S6: 4 units per semester
+        self.default_split_ratios = {
+            'S1': TermSplitRatio('S1', '3:2', 3, 2),  # 3 units Term 1, 2 units Term 2 = 5 total
+            'S2': TermSplitRatio('S2', '2:3', 2, 3),  # 2 units Term 1, 3 units Term 2 = 5 total
+            'S3': TermSplitRatio('S3', '3:2', 3, 2),  # 3 units Term 1, 2 units Term 2 = 5 total
+            'S4': TermSplitRatio('S4', '3:2', 3, 2),  # 3 units Term 1, 2 units Term 2 = 5 total
+            'S5': TermSplitRatio('S5', '2:3', 2, 3),  # 2 units Term 1, 3 units Term 2 = 5 total
+            'S6': TermSplitRatio('S6', '2:2', 2, 2)   # 2 units Term 1, 2 units Term 2 = 4 total
+        }
+        
+        # Dynamic split ratios based on unit count (for future faculties like Health):
+        # These ratios are used when actual unit count differs from defaults
+        self.unit_count_ratios = {
+            4: TermSplitRatio('4units', '2:2', 2, 2),      # 4 units: 2:2 (balanced)
+            5: TermSplitRatio('5units', '3:2', 3, 2),      # 5 units: 3:2 (Term 1 heavier)
+            6: TermSplitRatio('6units', '3:3', 3, 3),      # 6 units: 3:3 (balanced)
+            7: TermSplitRatio('7units', '4:3', 4, 3),      # 7 units: 4:3 (Term 1 heavier)
+            8: TermSplitRatio('8units', '4:4', 4, 4),      # 8 units: 4:4 (balanced)
         }
     
-    def split_semester(self, semester: str, course_units: List[CourseUnit]) -> Tuple[TermPlan, TermPlan]:
-        """Split semester course units into two terms"""
+    def _get_program_alternating_ratio(self, base_ratio: TermSplitRatio, program: Optional[str], 
+                                       unit_count: int, semester: str) -> TermSplitRatio:
+        """
+        Get alternating ratio for programs with 5 units per semester.
         
-        # Get split ratio
-        ratio = self.split_ratios.get(semester)
-        if not ratio:
-            raise ValueError(f"Unknown semester: {semester}")
+        For programs with 5 units (3:2 or 2:3 splits), different programs should
+        alternate ratios to avoid resource competition. Uses alphabetical ordering
+        to ensure deterministic assignment (e.g., BCS always gets opposite of BIT).
         
-        # Validate unit count
-        if len(course_units) != (ratio.term1_units + ratio.term2_units):
-            raise ValueError(f"Expected {ratio.term1_units + ratio.term2_units} units, got {len(course_units)}")
+        Only applies to 5-unit semesters. Programs with balanced ratios (3:3, 4:4)
+        are not alternated as they're already balanced.
         
-        # Identify fixed assignments
-        fixed_term1 = [u for u in course_units if u.preferred_term == "Term 1"]
-        fixed_term2 = [u for u in course_units if u.preferred_term == "Term 2"]
-        flexible = [u for u in course_units if u.preferred_term is None or u.preferred_term == "Either"]
-        
-        # Validate fixed assignments
-        if len(fixed_term1) > ratio.term1_units:
-            raise ValueError(f"Too many units prefer Term 1: {len(fixed_term1)} > {ratio.term1_units}")
-        if len(fixed_term2) > ratio.term2_units:
-            raise ValueError(f"Too many units prefer Term 2: {len(fixed_term2)} > {ratio.term2_units}")
-        
-        # Calculate split scores for flexible units
-        scores = self._calculate_split_scores(flexible, fixed_term1, fixed_term2)
-        
-        # Sort by term1 preference
-        sorted_units = sorted(flexible, key=lambda u: scores[u.id].term1_score, reverse=True)
-        
-        # Assign to terms
-        term1_slots = ratio.term1_units - len(fixed_term1)
-        term2_slots = ratio.term2_units - len(fixed_term2)
-        
-        term1_units = fixed_term1.copy()
-        term2_units = fixed_term2.copy()
-        
-        # Handle pairing constraints
-        paired_units = self._identify_pairs(flexible)
-        for pair in paired_units:
-            if len(pair) == 2:
-                score1 = scores[pair[0].id].term1_score + scores[pair[1].id].term1_score
-                score2 = scores[pair[0].id].term2_score + scores[pair[1].id].term2_score
-                
-                if score1 > score2 and term1_slots >= 2:
-                    term1_units.extend(pair)
-                    term1_slots -= 2
-                elif term2_slots >= 2:
-                    term2_units.extend(pair)
-                    term2_slots -= 2
-                
-                # Remove from sorted list
-                for unit in pair:
-                    if unit in sorted_units:
-                        sorted_units.remove(unit)
-        
-        # Assign remaining units
-        for unit in sorted_units:
-            # Check conflict constraints
-            has_term1_conflict = any(c in [u.id for u in term1_units] for c in unit.cannot_pair_with)
-            has_term2_conflict = any(c in [u.id for u in term2_units] for c in unit.cannot_pair_with)
+        Args:
+            base_ratio: The base ratio from defaults
+            program: Program identifier (e.g., 'BSCAIT', 'BCS')
+            unit_count: Effective unit count
+            semester: Semester identifier
             
-            if has_term1_conflict and term2_slots > 0:
-                term2_units.append(unit)
-                term2_slots -= 1
-            elif has_term2_conflict and term1_slots > 0:
-                term1_units.append(unit)
-                term1_slots -= 1
-            elif scores[unit.id].term1_score > scores[unit.id].term2_score and term1_slots > 0:
-                term1_units.append(unit)
-                term1_slots -= 1
-            elif term2_slots > 0:
-                term2_units.append(unit)
-                term2_slots -= 1
-            elif term1_slots > 0:
-                term1_units.append(unit)
-                term1_slots -= 1
+        Returns:
+            TermSplitRatio with potentially alternated values for 5-unit semesters
+        """
+        # Only alternate for 5-unit semesters (3:2 or 2:3 ratios)
+        if unit_count != 5:
+            return base_ratio
+        
+        # Only alternate if the ratio is asymmetric (3:2 or 2:3)
+        if base_ratio.term1_units == base_ratio.term2_units:
+            # Already balanced (like 2:2 for S6), no need to alternate
+            return base_ratio
+        
+        # If no program specified, use base ratio
+        if not program:
+            return base_ratio
+        
+        # Normalize program name for deterministic ordering
+        program_normalized = program.upper().strip()
+        
+        # Use alphabetical ordering: Programs earlier in alphabet get base ratio
+        # Programs later in alphabet get flipped ratio
+        # This ensures: BSCAIT (alphabetically first) gets base, BCS gets flipped
+        
+        # Extract program key for comparison
+        # Handle common program identifiers
+        if 'BSCAIT' in program_normalized or program_normalized.startswith('BIT') or 'BIT' in program_normalized:
+            # BSCAIT/BIT - alphabetically first
+            should_flip = False
+        elif 'BCS' in program_normalized:
+            # BCS - alphabetically second
+            should_flip = True
+        else:
+            # For unknown programs, use hash-based ordering for determinism
+            # This ensures consistent assignment even for new programs
+            program_hash = hash(program_normalized) % 2
+            should_flip = (program_hash == 1)
+        
+        if should_flip:
+            # This program gets flipped ratio (if base is 3:2, gets 2:3, and vice versa)
+            return TermSplitRatio(
+                semester,
+                f"{base_ratio.term2_units}:{base_ratio.term1_units}",
+                base_ratio.term2_units,
+                base_ratio.term1_units
+            )
+        else:
+            # This program gets base ratio (first program alphabetically)
+            return base_ratio
+    
+    def _calculate_dynamic_ratio(self, unit_count: int, semester: str, program: Optional[str] = None) -> TermSplitRatio:
+        """
+        Calculate appropriate split ratio based on unit count.
+        
+        Returns predefined ratio for common unit counts, or calculates one dynamically.
+        For 5-unit semesters, applies program-based alternating if program is provided.
+        
+        Args:
+            unit_count: Number of effective units
+            semester: Semester identifier
+            program: Optional program identifier for alternating ratios
+        """
+        # Use predefined ratio if available
+        if unit_count in self.unit_count_ratios:
+            base_ratio = self.unit_count_ratios[unit_count]
+            
+            # For 5 units, apply program-based alternating
+            if unit_count == 5 and program:
+                return self._get_program_alternating_ratio(base_ratio, program, unit_count, semester)
+            
+            return TermSplitRatio(semester, base_ratio.ratio_type, base_ratio.term1_units, base_ratio.term2_units)
+        
+        # For other unit counts, calculate balanced or slightly Term 1 heavier split
+        term1_units = math.ceil(unit_count / 2)
+        term2_units = unit_count - term1_units
+        
+        # Ensure at least 1 unit per term
+        if term1_units == 0:
+            term1_units = 1
+            term2_units = unit_count - 1
+        elif term2_units == 0:
+            term2_units = 1
+            term1_units = unit_count - 1
+        
+        ratio_type = f"{term1_units}:{term2_units}"
+        return TermSplitRatio(semester, ratio_type, term1_units, term2_units)
+    
+    def split_semester(self, semester: str, course_units: List[CourseUnit], 
+                      canonical_alignment: Dict[str, int] = None, 
+                      program: Optional[str] = None) -> Tuple[TermPlan, TermPlan]:
+        """
+        Split semester course units into two terms.
+        
+        Automatically detects unit count and uses appropriate split ratio:
+        - Uses default ratios for known semesters (S1-S6) with expected unit counts
+        - Applies program-based alternating for 5-unit semesters (3:2 vs 2:3)
+        - Calculates dynamic ratios for semesters with different unit counts (6-8 units)
+        - Supports future faculties like Health with different unit counts per semester
+        
+        Args:
+            semester: Semester identifier (S1-S6)
+            course_units: List of course units to split
+            canonical_alignment: Optional dict of canonical_id -> term_number for alignment
+            program: Optional program identifier (e.g., 'BSCAIT', 'BCS') for alternating ratios
+        """
+        canonical_alignment = canonical_alignment or {}
+        
+        # Extract program from course units if not provided
+        if not program and course_units:
+            # Try to get program from first course (most courses in a group share same program)
+            program = getattr(course_units[0], 'program', None)
+        
+        # Count course groups as 1 unit (Theory + Practical = 1 unit)
+        course_groups = {}
+        for unit in course_units:
+            if unit.course_group:
+                if unit.course_group not in course_groups:
+                    course_groups[unit.course_group] = []
+                course_groups[unit.course_group].append(unit)
+        
+        # Calculate effective unit count (groups count as 1, standalone courses count as 1)
+        standalone_units = [u for u in course_units if not u.course_group]
+        effective_unit_count = len(course_groups) + len(standalone_units)
+
+        if effective_unit_count == 0:
+            raise ValueError("No course units available to split")
+
+        # Get split ratio - try default first, then use dynamic calculation
+        default_ratio = self.default_split_ratios.get(semester)
+        
+        if default_ratio:
+            # Check if actual unit count matches default expectation
+            expected_units = default_ratio.term1_units + default_ratio.term2_units
+            
+            if expected_units == effective_unit_count:
+                # Use default ratio - matches expected unit count
+                # Apply program-based alternating for 5-unit semesters
+                if effective_unit_count == 5:
+                    ratio = self._get_program_alternating_ratio(default_ratio, program, effective_unit_count, semester)
+                else:
+                    ratio = default_ratio
+                term1_target_units = ratio.term1_units
+                term2_target_units = ratio.term2_units
             else:
-                raise ValueError("Cannot fit all units into terms")
+                # Unit count differs from default - calculate dynamic ratio
+                ratio = self._calculate_dynamic_ratio(effective_unit_count, semester, program)
+                term1_target_units = ratio.term1_units
+                term2_target_units = ratio.term2_units
+        else:
+            # Unknown semester - calculate dynamic ratio based on unit count
+            ratio = self._calculate_dynamic_ratio(effective_unit_count, semester, program)
+            term1_target_units = ratio.term1_units
+            term2_target_units = ratio.term2_units
+        
+        # SIMPLIFIED APPROACH: Term splitting is based ONLY on preferred_term from database
+        # Since preferred_term is mandatory in the frontend, all courses must have it
+        # No fallback logic needed - if preferred_term is missing, raise an error
+        
+        # Step 1: Group courses by course_group first (Theory+Practical pairs)
+        course_groups_dict = {}
+        standalone_courses = []
+        
+        for unit in course_units:
+            if unit.course_group:
+                if unit.course_group not in course_groups_dict:
+                    course_groups_dict[unit.course_group] = []
+                course_groups_dict[unit.course_group].append(unit)
+            else:
+                standalone_courses.append(unit)
+        
+        # Step 2: Assign courses to terms based on:
+        # Priority 1: Canonical alignment (for merging equivalent courses across programs)
+        # Priority 2: Preferred term from database/client input (main driver)
+        
+        term1_units = []
+        term2_units = []
+        missing_preferred_term = []  # Track units without preferred_term for error reporting
+        
+        # Process course groups first (they count as 1 unit, Theory+Practical stay together)
+        for group_id, group_units in course_groups_dict.items():
+            # Check canonical alignment for any course in the group
+            group_canonical_term = None
+            for unit in group_units:
+                canonical_id = unit.canonical_id
+                if canonical_id and canonical_id in canonical_alignment:
+                    group_canonical_term = canonical_alignment[canonical_id]
+                    break  # Use first canonical alignment found
+            
+            # Priority 1: Canonical alignment overrides preferred_term (for merging)
+            if group_canonical_term is not None:
+                if group_canonical_term == 1:
+                    term1_units.extend(group_units)
+                elif group_canonical_term == 2:
+                    term2_units.extend(group_units)
+                continue
+            
+            # Priority 2: Use preferred_term from database
+            # For course groups, all courses in the group should have the same preferred_term
+            # Take majority if they differ (shouldn't happen in practice)
+            from collections import Counter
+            group_preferred_terms = []
+            for unit in group_units:
+                preferred_term = _normalize_term_value(unit.preferred_term)
+                if preferred_term:
+                    group_preferred_terms.append(preferred_term)
+                else:
+                    missing_preferred_term.append(unit)
+            
+            if group_preferred_terms:
+                # Use majority preferred_term (should all be same)
+                term_counts = Counter(group_preferred_terms)
+                assigned_term = term_counts.most_common(1)[0][0]
+                
+                if assigned_term == 1:
+                    term1_units.extend(group_units)
+                elif assigned_term == 2:
+                    term2_units.extend(group_units)
+            else:
+                # No preferred_term found - this should not happen (mandatory field)
+                missing_preferred_term.extend(group_units)
+        
+        # Process standalone courses
+        for unit in standalone_courses:
+            canonical_id = unit.canonical_id
+            forced_term = canonical_alignment.get(canonical_id) if canonical_id else None
+            preferred_term = _normalize_term_value(unit.preferred_term)
+
+            # Priority 1: Canonical alignment overrides preferred_term (for merging)
+            if forced_term == 1:
+                term1_units.append(unit)
+            elif forced_term == 2:
+                term2_units.append(unit)
+            # Priority 2: Use preferred_term from database
+            elif preferred_term == 1:
+                term1_units.append(unit)
+            elif preferred_term == 2:
+                term2_units.append(unit)
+            else:
+                # No preferred_term - this should not happen (mandatory field)
+                missing_preferred_term.append(unit)
+        
+        # Error if any course is missing preferred_term (it's mandatory)
+        if missing_preferred_term:
+            missing_codes = [u.code for u in missing_preferred_term]
+            raise ValueError(
+                f"Term splitting failed: {len(missing_preferred_term)} course(s) are missing preferred_term "
+                f"(mandatory field). Courses: {', '.join(missing_codes)}. "
+                f"Please set preferred_term for all courses in the database/frontend."
+            )
         
         # Create term plans
         term1_plan = TermPlan(
@@ -151,8 +363,8 @@ class TermSplitter:
         # Current term loading
         term1_hours = sum(u.weekly_hours for u in term1_units)
         term2_hours = sum(u.weekly_hours for u in term2_units)
-        term1_labs = sum(1 for u in term1_units if u.is_lab)
-        term2_labs = sum(1 for u in term2_units if u.is_lab)
+        term1_labs = sum(1 for u in term1_units if u.preferred_room_type == "Lab")
+        term2_labs = sum(1 for u in term2_units if u.preferred_room_type == "Lab")
         term1_difficulty = sum(self._difficulty_weight(u.difficulty) for u in term1_units)
         term2_difficulty = sum(self._difficulty_weight(u.difficulty) for u in term2_units)
         
@@ -176,7 +388,7 @@ class TermSplitter:
                 reasoning.append("Balance difficulty")
             
             # Factor 3: Resource demand (labs)
-            if unit.is_lab:
+            if unit.preferred_room_type == "Lab":
                 if term1_labs < term2_labs:
                     term1_score += 0.15
                     reasoning.append("Lab distribution")
@@ -184,8 +396,9 @@ class TermSplitter:
                     term2_score += 0.15
                     reasoning.append("Lab distribution")
             
-            # Factor 4: Lecturer availability
-            if unit.lecturer_availability < 0.6:
+            # Factor 4: Lecturer availability (if available)
+            lecturer_availability = getattr(unit, 'lecturer_availability', 1.0)
+            if lecturer_availability < 0.6:
                 term2_score += 0.10
                 reasoning.append("Limited lecturer availability")
             
@@ -208,20 +421,24 @@ class TermSplitter:
         return scores
     
     def _identify_pairs(self, units: List[CourseUnit]) -> List[List[CourseUnit]]:
-        """Identify units that must be paired together"""
+        """Identify units that must be paired together (same course_group)"""
         pairs = []
         processed = set()
         
+        # Group units by course_group
+        groups = {}
         for unit in units:
-            if unit.id in processed:
-                continue
-            
-            if unit.must_pair_with:
-                paired_unit = next((u for u in units if u.id == unit.must_pair_with), None)
-                if paired_unit:
-                    pairs.append([unit, paired_unit])
+            if unit.course_group:
+                if unit.course_group not in groups:
+                    groups[unit.course_group] = []
+                groups[unit.course_group].append(unit)
+        
+        # Add all units in the same group as a pair
+        for group_id, group_units in groups.items():
+            if len(group_units) > 0:
+                pairs.append(group_units)
+                for unit in group_units:
                     processed.add(unit.id)
-                    processed.add(paired_unit.id)
         
         return pairs
     

@@ -7,16 +7,26 @@ from app.services.gga.fitness import FitnessEvaluator
 from app.services.gga.operators import GeneticOperators
 from app.services.csp.constraints import ConstraintChecker
 from app.config import Config
+from app.services.canonical_courses import CANONICAL_COURSE_MAPPING, get_canonical_id
 
 class GGAEngine:
     """Guided Genetic Algorithm engine for timetable optimization"""
     
     def __init__(self, course_units: Dict, student_groups: Dict, 
-                 lecturers: Dict, rooms: Dict):
+                 lecturers: Dict, rooms: Dict, 
+                 variable_pairs: Optional[Dict[str, List[str]]] = None,
+                 canonical_course_groups: Optional[Dict[str, Dict[int, List[str]]]] = None):
         self.course_units = course_units
         self.student_groups = student_groups
         self.lecturers = lecturers
         self.rooms = rooms
+        
+        # Theory/practical pairs: gene_id -> list of paired gene_ids
+        self.variable_pairs = variable_pairs or {}
+        
+        # Canonical course groups: canonical_course_id -> {session_number: [gene_ids]}
+        # Ensures canonical merged courses are scheduled at same time
+        self.canonical_course_groups = canonical_course_groups or {}
         
         self.fitness_evaluator = FitnessEvaluator(
             course_units, student_groups, lecturers, rooms
@@ -26,7 +36,9 @@ class GGAEngine:
         
         self.operators = GeneticOperators(
             self.constraint_checker, lecturers, rooms, 
-            course_units, student_groups
+            course_units, student_groups,
+            variable_pairs=variable_pairs,
+            canonical_course_groups=canonical_course_groups
         )
         
         # Configuration
@@ -347,34 +359,43 @@ class GGAEngine:
         return violations
     
     def _apply_violation_fixing_mutation(self, chromosome: Chromosome, violations: Dict) -> Optional[Chromosome]:
-        """Apply targeted mutations to fix violations"""
-        max_attempts = 30  # More attempts for violation-fixing
+        """Apply targeted mutations to fix violations - more aggressive approach"""
+        max_attempts = 50  # Increased attempts for violation-fixing
         valid_mutant = None
+        
+        # Prioritize violations: always try to fix them if they exist
+        has_weekly_violations = len(violations.get('weekly_limit', [])) > 0
+        has_daily_violations = len(violations.get('daily_limit', [])) > 0
+        has_unbalanced = len(violations.get('unbalanced_days', [])) > 0
         
         for attempt in range(max_attempts):
             mutant = chromosome.clone()
+            fixed = False
             
             # Priority 1: Fix weekly limit violations (swap lecturer)
-            if violations['weekly_limit'] and random.random() < 0.4:
+            if has_weekly_violations:
                 violation = random.choice(violations['weekly_limit'])
                 if self._fix_weekly_limit_violation(mutant, violation):
                     if self._validate_chromosome(mutant):
                         valid_mutant = mutant
+                        fixed = True
                         break
             
             # Priority 2: Fix daily limit violations (move to different day)
-            if violations['daily_limit'] and random.random() < 0.4:
+            if not fixed and has_daily_violations:
                 violation = random.choice(violations['daily_limit'])
                 if self._fix_daily_limit_violation(mutant, violation):
                     if self._validate_chromosome(mutant):
                         valid_mutant = mutant
+                        fixed = True
                         break
             
             # Priority 3: Fix unbalanced days (redistribute)
-            if violations['unbalanced_days'] and random.random() < 0.2:
+            if not fixed and has_unbalanced:
                 if self._fix_unbalanced_days(mutant, violations['unbalanced_days']):
                     if self._validate_chromosome(mutant):
                         valid_mutant = mutant
+                        fixed = True
                         break
         
         return valid_mutant
@@ -411,19 +432,37 @@ class GGAEngine:
         
         if alternative_days:
             new_day = random.choice(alternative_days)
-            # Update time slot
-            if isinstance(gene.time_slot, dict):
-                gene.time_slot = gene.time_slot.copy()
-                gene.time_slot['day'] = new_day
-            else:
-                from app.services.csp.domain import TimeSlot
-                gene.time_slot = TimeSlot(
-                    day=new_day,
-                    period=gene.time_slot.period,
-                    start=gene.time_slot.start,
-                    end=gene.time_slot.end,
-                    is_afternoon=gene.time_slot.is_afternoon
-                )
+            
+            paired_genes = self._get_paired_genes(gene.session_id, mutant)
+            genes_to_move = [gene] + paired_genes
+            
+            canonical_genes = []
+            for canonical_id, session_map in self.canonical_course_groups.items():
+                for session_num, gene_ids in session_map.items():
+                    if gene.session_id in gene_ids:
+                        canonical_genes.extend([g for g in mutant.genes 
+                                               if g.session_id in gene_ids and g.session_number == gene.session_number])
+            
+            seen_ids = set()
+            all_genes_to_move = []
+            for g in genes_to_move + canonical_genes:
+                if g.session_id not in seen_ids:
+                    seen_ids.add(g.session_id)
+                    all_genes_to_move.append(g)
+            
+            for g in all_genes_to_move:
+                if isinstance(g.time_slot, dict):
+                    g.time_slot = g.time_slot.copy()
+                    g.time_slot['day'] = new_day
+                else:
+                    from app.services.csp.domain import TimeSlot
+                    g.time_slot = TimeSlot(
+                        day=new_day,
+                        period=g.time_slot.period,
+                        start=g.time_slot.start,
+                        end=g.time_slot.end,
+                        is_afternoon=g.time_slot.is_afternoon
+                    )
             return True
         return False
     
@@ -499,30 +538,42 @@ class GGAEngine:
                         idx1 = random.choice(heavy_genes)
                         idx2 = random.choice(light_genes)
                         
-                        # Swap time slots (keeping period, changing day)
+                        gene1 = mutant.genes[idx1]
+                        gene2 = mutant.genes[idx2]
+                        
+                        # CRITICAL: Get all paired/canonical genes for gene1
+                        paired_genes1 = self._get_paired_genes(gene1.session_id, mutant)
+                        canonical_genes1 = []
+                        for canonical_id, session_map in self.canonical_course_groups.items():
+                            for session_num, gene_ids in session_map.items():
+                                if gene1.session_id in gene_ids:
+                                    canonical_genes1.extend([g for g in mutant.genes 
+                                                           if g.session_id in gene_ids and g.session_number == gene1.session_number])
+                        
+                        seen_ids1 = set()
+                        all_genes1 = []
+                        for g in [gene1] + paired_genes1 + canonical_genes1:
+                            if g.session_id not in seen_ids1:
+                                seen_ids1.add(g.session_id)
+                                all_genes1.append(g)
+                        
                         from app.services.csp.domain import TimeSlot
                         
-                        # Handle both dict and TimeSlot objects
-                        old_time = mutant.genes[idx1].time_slot
-                        new_day = mutant.genes[idx2].time_slot['day'] if isinstance(mutant.genes[idx2].time_slot, dict) else mutant.genes[idx2].time_slot.day
+                        new_day = gene2.time_slot['day'] if isinstance(gene2.time_slot, dict) else gene2.time_slot.day
                         
-                        if isinstance(old_time, dict):
-                            # Create new time slot dict
-                            new_time = old_time.copy()
-                            new_time['day'] = new_day
-                        else:
-                            # Create new TimeSlot object
-                            new_time = TimeSlot(
-                                day=new_day,
-                                period=old_time.period,
-                                start=old_time.start,
-                                end=old_time.end,
-                                is_afternoon=old_time.is_afternoon
-                            )
+                        for g in all_genes1:
+                            if isinstance(g.time_slot, dict):
+                                g.time_slot = g.time_slot.copy()
+                                g.time_slot['day'] = new_day
+                            else:
+                                g.time_slot = TimeSlot(
+                                    day=new_day,
+                                    period=g.time_slot.period,
+                                    start=g.time_slot.start,
+                                    end=g.time_slot.end,
+                                    is_afternoon=g.time_slot.is_afternoon
+                                )
                         
-                        mutant.genes[idx1].time_slot = new_time
-                        
-                        # Validate (allows limit violations, rejects critical ones)
                         if self._validate_chromosome(mutant):
                             valid_mutant = mutant
                             break
@@ -531,9 +582,43 @@ class GGAEngine:
             if valid_mutant is None and len(mutant.genes) >= 2:
                 idx1, idx2 = random.sample(range(len(mutant.genes)), 2)
                 
+                gene1 = mutant.genes[idx1]
+                gene2 = mutant.genes[idx2]
+                
+                # CRITICAL: Get all paired/canonical genes for both
+                paired_genes1 = self._get_paired_genes(gene1.session_id, mutant)
+                canonical_genes1 = []
+                for canonical_id, session_map in self.canonical_course_groups.items():
+                    for session_num, gene_ids in session_map.items():
+                        if gene1.session_id in gene_ids:
+                            canonical_genes1.extend([g for g in mutant.genes 
+                                                   if g.session_id in gene_ids and g.session_number == gene1.session_number])
+                # Deduplicate by session_id (Gene objects are not hashable)
+                seen_ids1 = set()
+                all_genes1 = []
+                for g in [gene1] + paired_genes1 + canonical_genes1:
+                    if g.session_id not in seen_ids1:
+                        seen_ids1.add(g.session_id)
+                        all_genes1.append(g)
+                
+                paired_genes2 = self._get_paired_genes(gene2.session_id, mutant)
+                canonical_genes2 = []
+                for canonical_id, session_map in self.canonical_course_groups.items():
+                    for session_num, gene_ids in session_map.items():
+                        if gene2.session_id in gene_ids:
+                            canonical_genes2.extend([g for g in mutant.genes 
+                                                   if g.session_id in gene_ids and g.session_number == gene2.session_number])
+                # Deduplicate by session_id (Gene objects are not hashable)
+                seen_ids2 = set()
+                all_genes2 = []
+                for g in [gene2] + paired_genes2 + canonical_genes2:
+                    if g.session_id not in seen_ids2:
+                        seen_ids2.add(g.session_id)
+                        all_genes2.append(g)
+                
                 # Only swap if genes are for different time slots originally
-                gene1_time = mutant.genes[idx1].time_slot
-                gene2_time = mutant.genes[idx2].time_slot
+                gene1_time = gene1.time_slot
+                gene2_time = gene2.time_slot
                 
                 # Handle both dict and TimeSlot objects
                 day1 = gene1_time['day'] if isinstance(gene1_time, dict) else gene1_time.day
@@ -543,13 +628,34 @@ class GGAEngine:
                 
                 # Check if swapping would create conflicts
                 if (day1 != day2 or period1 != period2):
-                    # Swap time slots
-                    if isinstance(gene1_time, dict):
-                        mutant.genes[idx1].time_slot = gene2_time.copy()
-                        mutant.genes[idx2].time_slot = gene1_time.copy()
-                    else:
-                        mutant.genes[idx1].time_slot = gene2_time.copy()
-                        mutant.genes[idx2].time_slot = gene1_time.copy()
+                    # Swap time slots for all related genes
+                    # CRITICAL: Create new time slot objects with correct day/period to preserve pairs
+                    from app.services.csp.domain import TimeSlot
+                    for g in all_genes1:
+                        if isinstance(gene2_time, dict):
+                            g.time_slot = gene2_time.copy()
+                        else:
+                            # Create new TimeSlot with gene2's day but preserve other properties
+                            g.time_slot = TimeSlot(
+                                day=gene2_time.day,
+                                period=gene2_time.period,
+                                start=gene2_time.start,
+                                end=gene2_time.end,
+                                is_afternoon=gene2_time.is_afternoon
+                            )
+                    
+                    for g in all_genes2:
+                        if isinstance(gene1_time, dict):
+                            g.time_slot = gene1_time.copy()
+                        else:
+                            # Create new TimeSlot with gene1's day but preserve other properties
+                            g.time_slot = TimeSlot(
+                                day=gene1_time.day,
+                                period=gene1_time.period,
+                                start=gene1_time.start,
+                                end=gene1_time.end,
+                                is_afternoon=gene1_time.is_afternoon
+                            )
                     
                     # Validate (allows limit violations, rejects critical ones)
                     if self._validate_chromosome(mutant):
@@ -558,58 +664,129 @@ class GGAEngine:
         
         return valid_mutant
     
+    def _get_paired_genes(self, gene_id: str, chromosome: Chromosome) -> List:
+        """Get all genes paired with the given gene (theory/practical pairs)"""
+        paired_ids = self.variable_pairs.get(gene_id, [])
+        return [g for g in chromosome.genes if g.session_id in paired_ids]
+    
+    def _get_canonical_group_genes(self, canonical_id: str, session_number: int, chromosome: Chromosome) -> List:
+        """Get all genes for a canonical course group at a specific session number"""
+        if canonical_id not in self.canonical_course_groups:
+            return []
+        session_genes = self.canonical_course_groups[canonical_id].get(session_number, [])
+        return [g for g in chromosome.genes if g.session_id in session_genes]
+    
+    def _get_canonical_genes_for_gene(self, gene, chromosome: Chromosome) -> List:
+        """Get all canonical group genes for a given gene using CANONICAL_COURSE_MAPPING"""
+        canonical_genes = []
+        # Get canonical ID for this gene's course
+        gene_canonical_id = get_canonical_id(gene.course_unit_id) or gene.course_unit_id
+        
+        # Check if this course is in a canonical group
+        if gene_canonical_id in self.canonical_course_groups:
+            session_map = self.canonical_course_groups[gene_canonical_id]
+            gene_ids = session_map.get(gene.session_number, [])
+            canonical_genes = [g for g in chromosome.genes 
+                             if g.session_id in gene_ids and g.session_number == gene.session_number]
+        
+        return canonical_genes
+    
+    def _validate_pairs_preserved(self, chromosome: Chromosome) -> bool:
+        """Validate that theory/practical pairs are scheduled at same time"""
+        for gene in chromosome.genes:
+            paired_genes = self._get_paired_genes(gene.session_id, chromosome)
+            if paired_genes:
+                gene_day = gene.time_slot['day'] if isinstance(gene.time_slot, dict) else gene.time_slot.day
+                gene_period = gene.time_slot['period'] if isinstance(gene.time_slot, dict) else gene.time_slot.period
+                
+                for paired in paired_genes:
+                    paired_day = paired.time_slot['day'] if isinstance(paired.time_slot, dict) else paired.time_slot.day
+                    paired_period = paired.time_slot['period'] if isinstance(paired.time_slot, dict) else paired.time_slot.period
+                    
+                    if gene_day != paired_day or gene_period != paired_period:
+                        return False  # Pair broken!
+        return True
+    
+    def _validate_canonical_groups_preserved(self, chromosome: Chromosome) -> bool:
+        """Validate that canonical merged courses are scheduled at same time"""
+        for canonical_id, session_map in self.canonical_course_groups.items():
+            for session_num, gene_ids in session_map.items():
+                canonical_genes = [g for g in chromosome.genes if g.session_id in gene_ids]
+                if len(canonical_genes) > 1:
+                    # All genes for this canonical course at this session should be at same time
+                    first_gene = canonical_genes[0]
+                    first_day = first_gene.time_slot['day'] if isinstance(first_gene.time_slot, dict) else first_gene.time_slot.day
+                    first_period = first_gene.time_slot['period'] if isinstance(first_gene.time_slot, dict) else first_gene.time_slot.period
+                    
+                    for other_gene in canonical_genes[1:]:
+                        other_day = other_gene.time_slot['day'] if isinstance(other_gene.time_slot, dict) else other_gene.time_slot.day
+                        other_period = other_gene.time_slot['period'] if isinstance(other_gene.time_slot, dict) else other_gene.time_slot.period
+                        
+                        if first_day != other_day or first_period != other_period:
+                            return False  # Canonical group broken!
+        return True
+    
     def _validate_chromosome(self, chromosome: Chromosome) -> bool:
         """
         Validate chromosome against CRITICAL constraints only
         
         Allows limit violations (weekly/daily hours) - these will be penalized in fitness
         Rejects only critical violations (double-booking, capacity, room type) - these can't be fixed
+        Also validates that pairs and canonical groups are preserved
         
         Returns True if no critical violations, False otherwise
         """
         from app.services.csp.constraints import ConstraintContext, ConstraintType
         
-        # Build constraint context from chromosome
-        context = ConstraintContext()
+        if not self._validate_pairs_preserved(chromosome):
+            return False
         
-        # Load resource data into context
+        if not self._validate_canonical_groups_preserved(chromosome):
+            return False
+        
+        context = ConstraintContext()
         context.lecturers = {lid: self._lecturer_to_dict(l) for lid, l in self.lecturers.items()}
         context.rooms = {rid: self._room_to_dict(r) for rid, r in self.rooms.items()}
         context.course_units = {cid: self._course_to_dict(c) for cid, c in self.course_units.items()}
         context.student_groups = {gid: self._group_to_dict(g) for gid, g in self.student_groups.items()}
         
-        # Convert genes to assignments and validate CRITICAL constraints only
+        # Build variable_pairs mapping for constraint context (CRITICAL for proper conflict detection)
+        context.variable_pairs = self.variable_pairs
+        
+        # Validate all genes in the chromosome
         for gene in chromosome.genes:
             assignment = gene.to_assignment()
             
-            # Check CRITICAL constraints only (double-booking, capacity, room type)
-            # Allow limit violations - they'll be penalized in fitness
-            
-            # 1. Double-booking (CRITICAL - cannot be fixed)
+            # CRITICAL: ALWAYS check double-booking FIRST - this is the most important constraint
+            # The constraint correctly handles pairs (allows paired variables at same time)
+            # but prevents conflicts with unrelated courses
             if not self.constraint_checker.check_constraint(
                 ConstraintType.NO_DOUBLE_BOOKING, assignment, context
             ):
                 return False
             
-            # 2. Room capacity (CRITICAL - cannot be fixed)
+            # Check room capacity
             if not self.constraint_checker.check_constraint(
                 ConstraintType.ROOM_CAPACITY, assignment, context
             ):
                 return False
             
-            # 3. Room type matching (CRITICAL - cannot be fixed)
+            # Check room type
             if not self.constraint_checker.check_constraint(
                 ConstraintType.ROOM_TYPE, assignment, context
             ):
                 return False
             
-            # Note: Weekly/daily limit violations are ALLOWED - fitness will penalize them
-            # This allows GGA to evolve solutions that fix violations gradually
+            # Check same-day repetition (HARD constraint - course can only be scheduled once per day)
+            if not self.constraint_checker.check_constraint(
+                ConstraintType.NO_SAME_DAY, assignment, context
+            ):
+                return False
             
-            # Add assignment to context (updates tracking)
+            # Add assignment to context for next iteration's checks
             context.add_assignment(assignment)
         
-        return True  # No critical violations
+        return True
     
     def _lecturer_to_dict(self, lecturer) -> dict:
         """Convert lecturer object to dict for constraint context"""
@@ -629,7 +806,7 @@ class GGAEngine:
         return {
             'id': room.id if hasattr(room, 'id') else room.get('id'),
             'capacity': room.capacity if hasattr(room, 'capacity') else room.get('capacity'),
-            'room_type': room.room_type if hasattr(room, 'room_type') else room.get('room_type', 'Classroom')
+            'room_type': room.room_type if hasattr(room, 'room_type') else room.get('room_type', 'Theory')
         }
     
     def _course_to_dict(self, course) -> dict:
@@ -638,7 +815,7 @@ class GGAEngine:
             return course
         return {
             'id': course.id if hasattr(course, 'id') else course.get('id'),
-            'is_lab': course.is_lab if hasattr(course, 'is_lab') else course.get('is_lab', False)
+            'preferred_room_type': course.preferred_room_type if hasattr(course, 'preferred_room_type') else course.get('preferred_room_type', 'Theory')
         }
     
     def _group_to_dict(self, group) -> dict:

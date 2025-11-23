@@ -24,7 +24,7 @@ Input Data → Validation → Term Splitting → CSP Scheduling → GGA Optimiza
 ### Hard Constraints (CSP)
 1. ✓ No double-booking (lecturers, rooms, students)
 2. ✓ Room capacity compliance
-3. ✓ Room type matching (labs vs classrooms)
+3. ✓ Room type matching (labs vs theory rooms)
 4. ✓ Lecturer specialization
 5. ✓ Weekly hour limits per lecturer role
 6. ✓ Daily session limits (max 2 per day, 1 morning + 1 afternoon)
@@ -661,7 +661,7 @@ Response:
           "id": "R001",
           "number": "L201",
           "capacity": 60,
-          "type": "Classroom"
+          "type": "Theory"
         },
         "time_slot": {
           "day": "MON",
@@ -740,7 +740,7 @@ For BSCAIT prototype (2 batches, 6 semesters):
   "id": "R001",
   "room_number": "L201",
   "capacity": 60,
-  "room_type": "Classroom",
+  "room_type": "Theory",
   "specializations": []
 }
 ```

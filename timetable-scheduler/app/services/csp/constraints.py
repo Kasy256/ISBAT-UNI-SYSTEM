@@ -17,6 +17,7 @@ class ConstraintType(Enum):
     NO_SAME_DAY = "no_same_day_repetition"
     CLASS_MERGING = "class_merging"
     CLASS_SPLITTING = "class_splitting"
+    PAIRING_CONSTRAINT = "pairing_constraint"  # Theory/practical must be scheduled together
 
 
 @dataclass
@@ -50,31 +51,26 @@ class Constraint:
 class ConstraintContext:
     """Context containing all scheduling information for constraint checking"""
     
-    def __init__(self):
-        # Indexed lookups for O(1) constraint checking
-        self.lecturer_schedule: Dict[str, Dict[str, Set[str]]] = {}  # lecturer_id -> {day_period -> assignment_ids}
-        self.room_schedule: Dict[str, Dict[str, Set[str]]] = {}  # room_id -> {day_period -> assignment_ids}
-        self.student_group_schedule: Dict[str, Dict[str, Set[str]]] = {}  # group_id -> {day_period -> assignment_ids}
-        
-        # Daily tracking
-        self.lecturer_daily_count: Dict[str, Dict[str, int]] = {}  # lecturer_id -> {day -> count}
-        self.lecturer_morning_used: Dict[str, Dict[str, bool]] = {}  # lecturer_id -> {day -> bool}
-        self.lecturer_afternoon_used: Dict[str, Dict[str, bool]] = {}  # lecturer_id -> {day -> bool}
-        
-        # Weekly tracking
-        self.lecturer_weekly_hours: Dict[str, float] = {}  # lecturer_id -> total_hours
-        
-        # Same-day unit tracking
-        self.unit_daily_schedule: Dict[tuple, Dict[str, bool]] = {}  # (group_id, unit_id) -> {day -> bool}
-        
-        # All assignments
-        self.assignments: Dict[str, Assignment] = {}  # variable_id -> assignment
-        
-        # Resource data
+    def __init__(self, variable_pairs: Optional[Dict[str, List[str]]] = None,
+                 merged_to_original_groups: Optional[Dict[str, List[str]]] = None,
+                 original_to_merged_groups: Optional[Dict[str, List[str]]] = None):
+        self.lecturer_schedule: Dict[str, Dict[str, Set[str]]] = {}
+        self.room_schedule: Dict[str, Dict[str, Set[str]]] = {}
+        self.student_group_schedule: Dict[str, Dict[str, Set[str]]] = {}
+        self.lecturer_daily_count: Dict[str, Dict[str, int]] = {}
+        self.lecturer_morning_used: Dict[str, Dict[str, bool]] = {}
+        self.lecturer_afternoon_used: Dict[str, Dict[str, bool]] = {}
+        self.lecturer_weekly_hours: Dict[str, float] = {}
+        self.unit_daily_schedule: Dict[tuple, Dict[str, bool]] = {}
+        self.assignments: Dict[str, Assignment] = {}
         self.lecturers: Dict[str, Any] = {}
         self.rooms: Dict[str, Any] = {}
         self.course_units: Dict[str, Any] = {}
         self.student_groups: Dict[str, Any] = {}
+        self.variable_pairs: Dict[str, List[str]] = variable_pairs or {}
+        self.merged_to_original_groups: Dict[str, List[str]] = merged_to_original_groups or {}
+        self.original_to_merged_groups: Dict[str, List[str]] = original_to_merged_groups or {}
+        self.variable_to_student_group: Dict[str, str] = {}  # variable_id -> student_group_id
     
     def add_assignment(self, assignment: Assignment):
         """Add assignment and update indices"""
@@ -83,35 +79,42 @@ class ConstraintContext:
         # Update schedules
         time_key = f"{assignment.time_slot.day}_{assignment.time_slot.period}"
         
-        # Lecturer schedule
         if assignment.lecturer_id not in self.lecturer_schedule:
             self.lecturer_schedule[assignment.lecturer_id] = {}
         if time_key not in self.lecturer_schedule[assignment.lecturer_id]:
             self.lecturer_schedule[assignment.lecturer_id][time_key] = set()
         self.lecturer_schedule[assignment.lecturer_id][time_key].add(assignment.variable_id)
         
-        # Room schedule
         if assignment.room_id not in self.room_schedule:
             self.room_schedule[assignment.room_id] = {}
         if time_key not in self.room_schedule[assignment.room_id]:
             self.room_schedule[assignment.room_id][time_key] = set()
         self.room_schedule[assignment.room_id][time_key].add(assignment.variable_id)
         
-        # Student group schedule
+        # Track assignment for the student group
         if assignment.student_group_id not in self.student_group_schedule:
             self.student_group_schedule[assignment.student_group_id] = {}
         if time_key not in self.student_group_schedule[assignment.student_group_id]:
             self.student_group_schedule[assignment.student_group_id][time_key] = set()
         self.student_group_schedule[assignment.student_group_id][time_key].add(assignment.variable_id)
         
-        # Update daily counts
+        # CRITICAL: If this is a merged group, also track the assignment for all original groups
+        # This ensures conflict checking works correctly for canonical courses across semesters
+        if assignment.student_group_id in self.merged_to_original_groups:
+            original_group_ids = self.merged_to_original_groups[assignment.student_group_id]
+            for orig_group_id in original_group_ids:
+                if orig_group_id not in self.student_group_schedule:
+                    self.student_group_schedule[orig_group_id] = {}
+                if time_key not in self.student_group_schedule[orig_group_id]:
+                    self.student_group_schedule[orig_group_id][time_key] = set()
+                self.student_group_schedule[orig_group_id][time_key].add(assignment.variable_id)
+        
         day = assignment.time_slot.day
         if assignment.lecturer_id not in self.lecturer_daily_count:
             self.lecturer_daily_count[assignment.lecturer_id] = {}
         self.lecturer_daily_count[assignment.lecturer_id][day] = \
             self.lecturer_daily_count[assignment.lecturer_id].get(day, 0) + 1
         
-        # Update morning/afternoon tracking
         if assignment.lecturer_id not in self.lecturer_morning_used:
             self.lecturer_morning_used[assignment.lecturer_id] = {}
             self.lecturer_afternoon_used[assignment.lecturer_id] = {}
@@ -121,14 +124,12 @@ class ConstraintContext:
         else:
             self.lecturer_morning_used[assignment.lecturer_id][day] = True
         
-        # Update weekly hours
         course_unit = self.course_units.get(assignment.course_unit_id)
         if course_unit:
-            hours = 2  # Each session is 2 hours
+            hours = 2
             self.lecturer_weekly_hours[assignment.lecturer_id] = \
                 self.lecturer_weekly_hours.get(assignment.lecturer_id, 0) + hours
         
-        # Update unit daily schedule
         unit_key = (assignment.student_group_id, assignment.course_unit_id)
         if unit_key not in self.unit_daily_schedule:
             self.unit_daily_schedule[unit_key] = {}
@@ -142,7 +143,6 @@ class ConstraintContext:
         assignment = self.assignments[variable_id]
         time_key = f"{assignment.time_slot.day}_{assignment.time_slot.period}"
         
-        # Update schedules
         if assignment.lecturer_id in self.lecturer_schedule:
             if time_key in self.lecturer_schedule[assignment.lecturer_id]:
                 self.lecturer_schedule[assignment.lecturer_id][time_key].discard(variable_id)
@@ -151,11 +151,19 @@ class ConstraintContext:
             if time_key in self.room_schedule[assignment.room_id]:
                 self.room_schedule[assignment.room_id][time_key].discard(variable_id)
         
+        # Remove from student group schedule
         if assignment.student_group_id in self.student_group_schedule:
             if time_key in self.student_group_schedule[assignment.student_group_id]:
                 self.student_group_schedule[assignment.student_group_id][time_key].discard(variable_id)
         
-        # Update daily counts
+        # CRITICAL: Also remove from original groups' schedules if this is a merged group
+        if assignment.student_group_id in self.merged_to_original_groups:
+            original_group_ids = self.merged_to_original_groups[assignment.student_group_id]
+            for orig_group_id in original_group_ids:
+                if orig_group_id in self.student_group_schedule:
+                    if time_key in self.student_group_schedule[orig_group_id]:
+                        self.student_group_schedule[orig_group_id][time_key].discard(variable_id)
+        
         day = assignment.time_slot.day
         if assignment.lecturer_id in self.lecturer_daily_count:
             if day in self.lecturer_daily_count[assignment.lecturer_id]:
@@ -163,8 +171,6 @@ class ConstraintContext:
                 if self.lecturer_daily_count[assignment.lecturer_id][day] <= 0:
                     del self.lecturer_daily_count[assignment.lecturer_id][day]
         
-        # Update morning/afternoon tracking - need to check if there are other sessions
-        # Count remaining sessions for this lecturer on this day
         remaining_sessions = 0
         morning_sessions = 0
         afternoon_sessions = 0
@@ -179,7 +185,6 @@ class ConstraintContext:
                 else:
                     morning_sessions += 1
         
-        # Update morning/afternoon flags based on remaining sessions
         if assignment.lecturer_id in self.lecturer_morning_used:
             if day in self.lecturer_morning_used[assignment.lecturer_id]:
                 self.lecturer_morning_used[assignment.lecturer_id][day] = (morning_sessions > 0)
@@ -188,14 +193,12 @@ class ConstraintContext:
             if day in self.lecturer_afternoon_used[assignment.lecturer_id]:
                 self.lecturer_afternoon_used[assignment.lecturer_id][day] = (afternoon_sessions > 0)
         
-        # Update weekly hours
         hours = 2
         if assignment.lecturer_id in self.lecturer_weekly_hours:
             self.lecturer_weekly_hours[assignment.lecturer_id] -= hours
             if self.lecturer_weekly_hours[assignment.lecturer_id] <= 0:
                 del self.lecturer_weekly_hours[assignment.lecturer_id]
         
-        # Remove unit daily schedule
         unit_key = (assignment.student_group_id, assignment.course_unit_id)
         if unit_key in self.unit_daily_schedule:
             if day in self.unit_daily_schedule[unit_key]:
@@ -209,37 +212,112 @@ class NoDoubleBookingConstraint(Constraint):
     
     def __init__(self):
         super().__init__(ConstraintType.NO_DOUBLE_BOOKING, [])
+        # Import canonical course utilities
+        from app.services.canonical_courses import get_canonical_id, CANONICAL_COURSE_MAPPING
+        self.get_canonical_id = get_canonical_id
+        self.CANONICAL_COURSE_MAPPING = CANONICAL_COURSE_MAPPING
     
     def is_satisfied(self, assignment: Assignment, context: ConstraintContext) -> bool:
         """Check for double-booking conflicts"""
         time_key = f"{assignment.time_slot.day}_{assignment.time_slot.period}"
         
-        # Check lecturer conflict
+        def are_paired(var_id1: str, var_id2: str) -> bool:
+            """Check if two variables are paired (bidirectional check)"""
+            if not context.variable_pairs:
+                return False
+            pairs1 = context.variable_pairs.get(var_id1, [])
+            pairs2 = context.variable_pairs.get(var_id2, [])
+            # Check both directions: var_id2 in pairs1 OR var_id1 in pairs2
+            return var_id2 in pairs1 or var_id1 in pairs2
+        
+        def are_canonical_merge(course_id1: str, course_id2: str) -> bool:
+            """Check if two courses are canonical merges (same canonical ID)"""
+            canonical1 = self.get_canonical_id(course_id1)
+            canonical2 = self.get_canonical_id(course_id2)
+            # If both have the same canonical ID (and it's not None), they should be merged
+            if canonical1 and canonical2:
+                return canonical1 == canonical2
+            # If one or both don't have canonical IDs, they're not canonical merges
+            return False
+        
         if assignment.lecturer_id in context.lecturer_schedule:
             if time_key in context.lecturer_schedule[assignment.lecturer_id]:
                 existing = context.lecturer_schedule[assignment.lecturer_id][time_key]
-                # If set exists and has items, check if this assignment is already there
                 if len(existing) > 0:
-                    # If this assignment is NOT in the existing set, it's a conflict
                     if assignment.variable_id not in existing:
-                        return False
+                        # Check if all existing assignments are either paired OR canonical merges
+                        all_compatible = True
+                        for existing_id in existing:
+                            if are_paired(assignment.variable_id, existing_id):
+                                continue
+                            existing_assignment = context.assignments.get(existing_id)
+                            if existing_assignment:
+                                if are_canonical_merge(assignment.course_unit_id, existing_assignment.course_unit_id):
+                                    continue
+                            # Not paired and not canonical merge - conflict!
+                            all_compatible = False
+                            break
+                        if not all_compatible:
+                            return False
         
-        # Check room conflict
         if assignment.room_id in context.room_schedule:
             if time_key in context.room_schedule[assignment.room_id]:
                 existing = context.room_schedule[assignment.room_id][time_key]
                 if len(existing) > 0:
                     if assignment.variable_id not in existing:
-                        return False
+                        # Check if all existing assignments are either paired OR canonical merges
+                        all_compatible = True
+                        for existing_id in existing:
+                            if are_paired(assignment.variable_id, existing_id):
+                                continue
+                            existing_assignment = context.assignments.get(existing_id)
+                            if existing_assignment:
+                                if are_canonical_merge(assignment.course_unit_id, existing_assignment.course_unit_id):
+                                    continue
+                            # Not paired and not canonical merge - conflict!
+                            all_compatible = False
+                            break
+                        if not all_compatible:
+                            return False
         
-        # CRITICAL: Check student group conflict
-        # A student group can only attend ONE session at any given time
-        if assignment.student_group_id in context.student_group_schedule:
-            if time_key in context.student_group_schedule[assignment.student_group_id]:
-                existing = context.student_group_schedule[assignment.student_group_id][time_key]
-                if len(existing) > 0:
-                    if assignment.variable_id not in existing:
-                        return False
+        # CRITICAL: Check student group double-booking
+        # For merged groups, check conflicts for ALL original groups that are part of the merge
+        # Also check if original groups are part of OTHER merged groups that already have assignments
+        groups_to_check = [assignment.student_group_id]
+        if assignment.student_group_id in context.merged_to_original_groups:
+            # This is a merged group - check conflicts for all original groups
+            groups_to_check.extend(context.merged_to_original_groups[assignment.student_group_id])
+            # Also check if any of the original groups are part of OTHER merged groups
+            if hasattr(context, 'original_to_merged_groups') and context.original_to_merged_groups:
+                for orig_group_id in context.merged_to_original_groups[assignment.student_group_id]:
+                    if orig_group_id in context.original_to_merged_groups:
+                        for other_merged_id in context.original_to_merged_groups[orig_group_id]:
+                            if other_merged_id != assignment.student_group_id:
+                                groups_to_check.append(other_merged_id)
+        
+        for group_id in groups_to_check:
+            if group_id in context.student_group_schedule:
+                if time_key in context.student_group_schedule[group_id]:
+                    existing = context.student_group_schedule[group_id][time_key]
+                    if len(existing) > 0:
+                        # If this variable is already in the schedule, it's not a conflict (re-checking same assignment)
+                        if assignment.variable_id not in existing:
+                            # Check if ALL existing assignments are either paired OR canonical merges
+                            # If ANY existing assignment is NOT paired AND NOT a canonical merge, it's a conflict
+                            all_compatible = True
+                            for existing_id in existing:
+                                if are_paired(assignment.variable_id, existing_id):
+                                    continue
+                                existing_assignment = context.assignments.get(existing_id)
+                                if existing_assignment:
+                                    if are_canonical_merge(assignment.course_unit_id, existing_assignment.course_unit_id):
+                                        continue
+                                # Not paired and not canonical merge - conflict!
+                                all_compatible = False
+                                break
+                            if not all_compatible:
+                                # Found at least one existing assignment that's not compatible - conflict!
+                                return False
         
         return True
     
@@ -273,14 +351,24 @@ class RoomCapacityConstraint(Constraint):
         super().__init__(ConstraintType.ROOM_CAPACITY, [])
     
     def is_satisfied(self, assignment: Assignment, context: ConstraintContext) -> bool:
-        """Check if room can accommodate student group"""
+        """Check if room can accommodate student group
+        
+        IMPORTANT: For merged groups, the student_group.size already represents
+        the total merged size (e.g., 72 students from multiple original groups).
+        This check ensures the room capacity (e.g., 88) is >= merged group size (72).
+        """
         room = context.rooms.get(assignment.room_id)
         student_group = context.student_groups.get(assignment.student_group_id)
         
         if not room or not student_group:
             return False
         
-        return room.get('capacity', 0) >= student_group.get('size', 0)
+        room_capacity = room.get('capacity', 0)
+        group_size = student_group.get('size', 0)
+        
+        # Room capacity must be >= group size
+        # For merged groups, group_size is already the total merged size
+        return room_capacity >= group_size
     
     def get_violations(self, assignment: Assignment, context: ConstraintContext) -> List[str]:
         """Get capacity violations"""
@@ -299,26 +387,40 @@ class RoomCapacityConstraint(Constraint):
 
 
 class RoomTypeConstraint(Constraint):
-    """Ensures room type matches course requirements (lab vs classroom)"""
+    """Ensures room type matches course requirements (Lab courses → Lab rooms, Theory courses → Theory rooms)"""
     
     def __init__(self):
         super().__init__(ConstraintType.ROOM_TYPE, [])
     
     def is_satisfied(self, assignment: Assignment, context: ConstraintContext) -> bool:
-        """Check if room type matches course requirements"""
+        """Check if room type matches course requirements
+        
+        DIRECT LOGIC:
+        1. Check course type (Lab/Practical → Lab room, Theory → Theory room)
+        2. For merged canonical courses: Calculate SUM of all merged groups
+        3. Check if Lab room can fit the total merged students
+        """
         room = context.rooms.get(assignment.room_id)
         course_unit = context.course_units.get(assignment.course_unit_id)
+        student_group = context.student_groups.get(assignment.student_group_id)
         
         if not room or not course_unit:
             return False
         
-        is_lab = course_unit.get('is_lab', False)
+        preferred_room_type = course_unit.get('preferred_room_type', 'Theory')  # Required field
         room_type = room.get('room_type', '')
         
-        if is_lab:
-            return room_type == 'Lab'
+        # Use preferred_room_type directly
+        required_room_type = preferred_room_type
+        
+        # STRICT: Course MUST use the required room type
+        if room_type != required_room_type:
+            # HARD CONSTRAINT: Room type must match course type
+            # Lab courses MUST use Lab rooms, Theory courses MUST use Theory rooms
+            return False
         else:
-            return room_type in ['Classroom', 'Lecture Hall', 'Seminar Room']
+            # Room type matches - always valid
+            return True
     
     def get_violations(self, assignment: Assignment, context: ConstraintContext) -> List[str]:
         """Get room type violations"""
@@ -327,13 +429,13 @@ class RoomTypeConstraint(Constraint):
         course_unit = context.course_units.get(assignment.course_unit_id)
         
         if room and course_unit:
-            is_lab = course_unit.get('is_lab', False)
+            preferred_room_type = course_unit.get('preferred_room_type', 'Theory')
             room_type = room.get('room_type', '')
             
-            if is_lab and room_type != 'Lab':
+            if preferred_room_type == 'Lab' and room_type != 'Lab':
                 violations.append(f"Lab course {assignment.course_unit_id} requires Lab room")
-            elif not is_lab and room_type == 'Lab':
-                violations.append(f"Non-lab course {assignment.course_unit_id} assigned to Lab")
+            elif preferred_room_type == 'Theory' and room_type == 'Lab':
+                violations.append(f"Theory course {assignment.course_unit_id} assigned to Lab room")
         
         return violations
 
@@ -345,14 +447,17 @@ class LecturerSpecializationConstraint(Constraint):
         super().__init__(ConstraintType.LECTURER_SPECIALIZATION, [])
     
     def is_satisfied(self, assignment: Assignment, context: ConstraintContext) -> bool:
-        """Check if lecturer is qualified"""
+        """Check if lecturer is qualified using canonical matching"""
         lecturer = context.lecturers.get(assignment.lecturer_id)
         
         if not lecturer:
             return False
         
         specializations = lecturer.get('specializations', [])
-        return assignment.course_unit_id in specializations
+        
+        # Use canonical matching
+        from app.services.canonical_courses import is_canonical_match
+        return is_canonical_match(assignment.course_unit_id, specializations)
     
     def get_violations(self, assignment: Assignment, context: ConstraintContext) -> List[str]:
         """Get qualification violations"""
@@ -361,7 +466,9 @@ class LecturerSpecializationConstraint(Constraint):
         
         if lecturer:
             specializations = lecturer.get('specializations', [])
-            if assignment.course_unit_id not in specializations:
+            # Use canonical matching
+            from app.services.canonical_courses import is_canonical_match
+            if not is_canonical_match(assignment.course_unit_id, specializations):
                 violations.append(
                     f"Lecturer {assignment.lecturer_id} not qualified for "
                     f"course {assignment.course_unit_id}"
@@ -483,47 +590,20 @@ class WeeklyLimitConstraint(Constraint):
 
 class NoSameDayRepetitionConstraint(Constraint):
     """
-    Ensures same course unit isn't taught twice to same group on same day
-    Exception: Consecutive lab sessions (same course, same day, consecutive time slots) are allowed
+    HARD CONSTRAINT: Ensures same course unit is only taught once per day to same group
+    A course unit can only have 1 session per day - no exceptions
     """
     
     def __init__(self):
         super().__init__(ConstraintType.NO_SAME_DAY, [])
     
     def is_satisfied(self, assignment: Assignment, context: ConstraintContext) -> bool:
-        """Check for same-day repetition"""
+        """Check for same-day repetition - HARD: no course unit twice on same day"""
         day = assignment.time_slot.day
         unit_key = (assignment.student_group_id, assignment.course_unit_id)
         
-        # Check if course already scheduled on this day
+        # HARD CONSTRAINT: If course already scheduled on this day, reject
         if context.unit_daily_schedule.get(unit_key, {}).get(day, False):
-            # Check if this is a lab course and if consecutive sessions are allowed
-            course_unit = context.course_units.get(assignment.course_unit_id)
-            if course_unit and course_unit.get('is_lab', False):
-                # For labs, check if sessions are consecutive
-                # Get existing assignments for this course on this day
-                existing_assignments = []
-                for var_id, existing_assignment in context.assignments.items():
-                    if (existing_assignment.student_group_id == assignment.student_group_id and
-                        existing_assignment.course_unit_id == assignment.course_unit_id and
-                        existing_assignment.time_slot.day == day):
-                        existing_assignments.append(existing_assignment)
-                
-                # If there's one existing session, check if they're consecutive
-                if len(existing_assignments) == 1:
-                    existing = existing_assignments[0]
-                    # Check if periods are consecutive (e.g., SLOT_1 and SLOT_2, or SLOT_3 and SLOT_4)
-                    periods = ['SLOT_1', 'SLOT_2', 'SLOT_3', 'SLOT_4']
-                    try:
-                        existing_idx = periods.index(existing.time_slot.period)
-                        new_idx = periods.index(assignment.time_slot.period)
-                        # Allow if consecutive (difference of 1) and same day
-                        if abs(existing_idx - new_idx) == 1:
-                            return True  # Consecutive lab sessions allowed
-                    except ValueError:
-                        pass
-            
-            # Non-consecutive or non-lab repetition not allowed
             return False
         
         return True
@@ -534,35 +614,12 @@ class NoSameDayRepetitionConstraint(Constraint):
         day = assignment.time_slot.day
         unit_key = (assignment.student_group_id, assignment.course_unit_id)
         
+        # HARD CONSTRAINT: Course unit can only be scheduled once per day
         if context.unit_daily_schedule.get(unit_key, {}).get(day, False):
-            # Check if consecutive lab exception applies
-            course_unit = context.course_units.get(assignment.course_unit_id)
-            is_consecutive_lab = False
-            
-            if course_unit and course_unit.get('is_lab', False):
-                existing_assignments = []
-                for var_id, existing_assignment in context.assignments.items():
-                    if (existing_assignment.student_group_id == assignment.student_group_id and
-                        existing_assignment.course_unit_id == assignment.course_unit_id and
-                        existing_assignment.time_slot.day == day):
-                        existing_assignments.append(existing_assignment)
-                
-                if len(existing_assignments) == 1:
-                    existing = existing_assignments[0]
-                    periods = ['SLOT_1', 'SLOT_2', 'SLOT_3', 'SLOT_4']
-                    try:
-                        existing_idx = periods.index(existing.time_slot.period)
-                        new_idx = periods.index(assignment.time_slot.period)
-                        if abs(existing_idx - new_idx) == 1:
-                            is_consecutive_lab = True
-                    except ValueError:
-                        pass
-            
-            if not is_consecutive_lab:
-                violations.append(
-                    f"Course {assignment.course_unit_id} already scheduled for "
-                    f"group {assignment.student_group_id} on {day} (non-consecutive)"
-                )
+            violations.append(
+                f"Course {assignment.course_unit_id} already scheduled for "
+                f"group {assignment.student_group_id} on {day} (HARD: only 1 session per day allowed)"
+            )
         
         return violations
 
@@ -782,6 +839,51 @@ class ClassSplittingConstraint(Constraint):
         return violations
 
 
+class PairingConstraint(Constraint):
+    """Ensures theory/practical pairs are scheduled at the same time"""
+    
+    def __init__(self):
+        super().__init__(ConstraintType.PAIRING_CONSTRAINT, [])
+    
+    def is_satisfied(self, assignment: Assignment, context: ConstraintContext) -> bool:
+        """Check if paired variables are scheduled at the same time"""
+        # Get paired variable IDs for this assignment
+        paired_var_ids = context.variable_pairs.get(assignment.variable_id, [])
+        if not paired_var_ids:
+            return True  # No pairs, constraint satisfied
+        
+        # Check if all paired variables are scheduled at the same time
+        time_key = f"{assignment.time_slot.day}_{assignment.time_slot.period}"
+        
+        for paired_var_id in paired_var_ids:
+            if paired_var_id in context.assignments:
+                paired_assignment = context.assignments[paired_var_id]
+                paired_time_key = f"{paired_assignment.time_slot.day}_{paired_assignment.time_slot.period}"
+                if paired_time_key != time_key:
+                    return False  # Pair broken - not at same time
+        
+        return True
+    
+    def get_violations(self, assignment: Assignment, context: ConstraintContext) -> List[str]:
+        """Get pairing violations"""
+        violations = []
+        paired_var_ids = context.variable_pairs.get(assignment.variable_id, [])
+        
+        if paired_var_ids:
+            time_key = f"{assignment.time_slot.day}_{assignment.time_slot.period}"
+            for paired_var_id in paired_var_ids:
+                if paired_var_id in context.assignments:
+                    paired_assignment = context.assignments[paired_var_id]
+                    paired_time_key = f"{paired_assignment.time_slot.day}_{paired_assignment.time_slot.period}"
+                    if paired_time_key != time_key:
+                        violations.append(
+                            f"Paired variable {paired_var_id} scheduled at different time "
+                            f"({paired_time_key} vs {time_key})"
+                        )
+        
+        return violations
+
+
 class ConstraintChecker:
     """Manages and checks all constraints"""
     
@@ -791,6 +893,7 @@ class ConstraintChecker:
             RoomCapacityConstraint(),
             RoomTypeConstraint(),
             LecturerSpecializationConstraint(),
+            PairingConstraint(),  # Add pairing as hard constraint
             DailyLimitConstraint(),
             WeeklyLimitConstraint(),
             NoSameDayRepetitionConstraint(),

@@ -23,9 +23,11 @@ from app.models.course import CourseUnit
 from app.models.room import Room
 from app.models.student import StudentGroup
 from app.services.preprocessing.term_splitter import TermSplitter
+from app.services.preprocessing.canonical_term_planner import build_canonical_term_alignment
 from app.services.csp.csp_engine import CSPEngine
 from app.services.gga.gga_engine import GGAEngine
 from app.config import Config
+from app.services.canonical_courses import get_canonical_id, CANONICAL_COURSE_MAPPING
 
 def setup_database():
     """Connect to MongoDB"""
@@ -61,22 +63,31 @@ def fetch_all_data(db):
     
     return student_groups, courses, lecturers, rooms
 
-def get_term_courses_for_group(student_group, courses, term_number):
-    """
-    Get courses for a specific term for a student group
-    Returns list of CourseUnit objects for the specified term
-    """
-    # Get all courses for this group
-    group_courses = [courses[cu_id] for cu_id in student_group.course_units if cu_id in courses]
+def get_term_courses_for_group(student_group, courses, term_number, canonical_alignment=None):
+    """Get courses for a specific term for a student group"""
+    course_ids = []
+    for cu in student_group.course_units:
+        if isinstance(cu, dict):
+            course_id = cu.get('code')
+            if course_id:
+                course_ids.append(course_id)
+        elif isinstance(cu, str):
+            course_ids.append(cu)
+    
+    group_courses = [courses[cu_id] for cu_id in course_ids if cu_id in courses]
     
     if not group_courses:
         return []
     
-    # Use term splitter to determine which courses belong to which term
     term_splitter = TermSplitter()
     
     try:
-        term1_plan, term2_plan = term_splitter.split_semester(student_group.semester, group_courses)
+        term1_plan, term2_plan = term_splitter.split_semester(
+            student_group.semester,
+            group_courses,
+            canonical_alignment=canonical_alignment,
+            program=student_group.program
+        )
         
         if term_number == 1:
             return term1_plan.assigned_units
@@ -86,27 +97,439 @@ def get_term_courses_for_group(student_group, courses, term_number):
             raise ValueError(f"Invalid term number: {term_number}. Must be 1 or 2.")
             
     except ValueError as e:
-        # If split fails (e.g., wrong number of courses), handle gracefully
         print(f"   ⚠️  Warning for {student_group.display_name}: {str(e)}")
         
-        # If we can't split, check if courses have preferred_term
+        course_groups = {}
+        standalone_courses = []
+        for course in group_courses:
+            if course.course_group:
+                if course.course_group not in course_groups:
+                    course_groups[course.course_group] = []
+                course_groups[course.course_group].append(course)
+            else:
+                standalone_courses.append(course)
+        
+        effective_units = list(course_groups.values()) + [[c] for c in standalone_courses]
+        effective_unit_count = len(effective_units)
+        
+        ratio = term_splitter.split_ratios.get(student_group.semester)
+        if not ratio:
+            term1_unit_count = effective_unit_count // 2
+        else:
+            total_expected = ratio.term1_units + ratio.term2_units
+            if total_expected == 0:
+                term1_unit_count = effective_unit_count // 2
+            else:
+                term1_ratio = ratio.term1_units / total_expected
+                term1_unit_count = max(1, int(effective_unit_count * term1_ratio))
+                term1_unit_count = min(term1_unit_count, effective_unit_count - 1)
+        
+        preferred_term1_units = []
+        preferred_term2_units = []
+        flexible_units = []
+        
+        for unit_group in effective_units:
+            forced_term = None
+            if canonical_alignment:
+                for course in unit_group:
+                    canonical_id = course.canonical_id
+                    if canonical_id and canonical_id in canonical_alignment:
+                        forced_term = canonical_alignment[canonical_id]
+                        break
+
+            has_term1_pref = forced_term == 1 or any(
+                (c.preferred_term in ["Term 1", "Term1", "1"]) for c in unit_group
+            )
+            has_term2_pref = forced_term == 2 or any(
+                (c.preferred_term in ["Term 2", "Term2", "2"]) for c in unit_group
+            )
+            
+            if has_term1_pref:
+                preferred_term1_units.append(unit_group)
+            elif has_term2_pref:
+                preferred_term2_units.append(unit_group)
+            else:
+                flexible_units.append(unit_group)
+        
+        term1_courses = [c for unit_group in preferred_term1_units for c in unit_group]
+        term2_courses = [c for unit_group in preferred_term2_units for c in unit_group]
+        
+        remaining_term1_slots = max(0, term1_unit_count - len(preferred_term1_units))
+        remaining_term2_slots = max(0, effective_unit_count - term1_unit_count - len(preferred_term2_units))
+        
+        flexible_sorted = sorted(flexible_units, key=lambda unit_group: (
+            not any(c.is_foundational for c in unit_group),
+            any(c.difficulty == "Hard" for c in unit_group)
+        ))
+        
+        assigned_term1_count = len(preferred_term1_units)
+        for unit_group in flexible_sorted:
+            if assigned_term1_count < term1_unit_count and remaining_term1_slots > 0:
+                term1_courses.extend(unit_group)
+                remaining_term1_slots -= 1
+                assigned_term1_count += 1
+            else:
+                term2_courses.extend(unit_group)
+                remaining_term2_slots -= 1
+        
         if term_number == 1:
-            # Try to get courses that prefer Term1, or all if none specified
-            term1_courses = [c for c in group_courses if c.preferred_term in ["Term 1", "Term1", "1"]]
-            if term1_courses:
-                return term1_courses
-            # If no preference, return empty (courses will be in Term2)
-            return []
-        else:  # term_number == 2
-            # Try to get courses that prefer Term2, or all if none specified
-            term2_courses = [c for c in group_courses if c.preferred_term in ["Term 2", "Term2", "2"]]
-            if term2_courses:
-                return term2_courses
-            # If no preference and Term1 is empty, return all
-            term1_courses = [c for c in group_courses if c.preferred_term in ["Term 1", "Term1", "1"]]
-            if not term1_courses:
-                return group_courses
-            return []
+            return term1_courses
+        else:
+            return term2_courses
+
+
+def clean_course_name(name: str) -> str:
+    """
+    Remove 'Theory' and 'Practical' suffixes from course names.
+    For canonical courses that combine theory and practical, display clean name.
+    
+    Examples:
+        'Programming in C - Theory' -> 'Programming in C'
+        'Programming in C - Practical' -> 'Programming in C'
+        'Object Oriented Programming Using JAVA - Theory' -> 'Object Oriented Programming Using JAVA'
+    """
+    if not name:
+        return name
+    
+    # Remove common suffixes
+    name = name.replace(' - Theory', '').replace(' - Practical', '')
+    name = name.replace(' Theory', '').replace(' Practical', '')
+    name = name.replace('-Theory', '').replace('-Practical', '')
+    name = name.replace('--Theory', '').replace('--Practical', '')
+    
+    # Clean up any double spaces or trailing dashes
+    name = name.replace('  ', ' ').strip()
+    if name.endswith(' -'):
+        name = name[:-2].strip()
+    if name.endswith('-'):
+        name = name[:-1].strip()
+    
+    return name
+
+
+def _create_merged_course(canonical_id, canonical_courses, data, courses_dict, groups, 
+                          merged_course_units, canonical_course_codes):
+    """Helper function to create a merged course unit."""
+    prototype = data['prototype']
+    
+    # If no courses found in mapping, fall back to collected courses
+    if not canonical_courses:
+        canonical_courses = [prototype]
+        seen_course_ids = {prototype.id}
+        for group_info in groups:
+            course_id = group_info['course_id']
+            if course_id not in seen_course_ids and course_id in courses_dict:
+                canonical_courses.append(courses_dict[course_id])
+                seen_course_ids.add(course_id)
+    
+    # Since canonical mapping already combines theory+practical as ONE unified unit,
+    # all courses in the mapping represent components of the same course
+    # Use the maximum hours from any component (they're all part of one course)
+    if canonical_courses:
+        total_weekly_hours = max(c.weekly_hours for c in canonical_courses)
+    else:
+        total_weekly_hours = prototype.weekly_hours
+    
+    # Use canonical courses for other properties too
+    courses_for_props = canonical_courses if canonical_courses else [prototype]
+    total_credits = max(c.credits for c in courses_for_props)
+    # CRITICAL: If any component has a lab (practical), the merged course is a Lab course
+    has_lab = any(c.preferred_room_type == 'Lab' for c in courses_for_props)
+    preferred_room_type = 'Lab' if has_lab else 'Theory'
+    preserved_course_group = f"{canonical_id}_GROUP"
+    total_sessions_required = (total_weekly_hours + 1) // 2
+    
+    # Clean the course name - remove "Theory" and "Practical" suffixes
+    # Use the cleanest name from all canonical courses
+    clean_names = [clean_course_name(c.name) for c in courses_for_props]
+    # Prefer the longest clean name (most descriptive)
+    clean_name = max(clean_names, key=len) if clean_names else clean_course_name(prototype.name)
+    
+    merged_course = CourseUnit(
+        id=canonical_id,
+        code=prototype.code,
+        name=clean_name,  # Use cleaned name without Theory/Practical suffix
+        weekly_hours=total_weekly_hours,
+        credits=total_credits,
+        preferred_room_type=preferred_room_type,  # Lab if any component is a lab
+        difficulty=prototype.difficulty,
+        is_foundational=prototype.is_foundational,
+        prerequisites=prototype.prerequisites,
+        corequisites=prototype.corequisites,
+        preferred_term=prototype.preferred_term,
+        semester=prototype.semester,
+        program=prototype.program,
+        course_group=preserved_course_group
+    )
+    merged_course._sessions_required = total_sessions_required
+    merged_course_units.append(merged_course)
+    courses_dict[canonical_id] = merged_course
+
+
+def merge_equivalent_courses(group_entries, term_number, courses_dict, rooms_list=None):
+    """Merge equivalent courses across student groups using canonical IDs."""
+    canonical_map = {}
+    merged_student_groups = []
+    merged_course_units = []
+    merged_group_details = {}
+
+    for entry in group_entries:
+        original_group = entry['original_group']
+        term_courses = entry['term_courses']
+
+        for course in term_courses:
+            canonical_id = get_canonical_id(course.id) or course.id
+            data = canonical_map.setdefault(canonical_id, {
+                'prototype': course,
+                'groups': []
+            })
+            data['groups'].append({
+                'student_group': original_group,
+                'course_id': course.id
+            })
+
+    for canonical_id, data in canonical_map.items():
+        groups = data['groups']
+        
+        # CRITICAL FIX: Deduplicate by student_group.id before summing
+        # Multiple course units (e.g., BIT1101, BIT1106) can map to the same canonical_id,
+        # but they're taken by the SAME student group, so we should only count each group once
+        unique_student_groups = {}
+        course_units_per_group = {}  # Track which course units each group has
+        for g in groups:
+            student_group = g['student_group']
+            course_id = g['course_id']
+            # Use student_group.id as key to ensure we only count each group once
+            if student_group.id not in unique_student_groups:
+                unique_student_groups[student_group.id] = student_group
+                course_units_per_group[student_group.id] = []
+            course_units_per_group[student_group.id].append(course_id)
+        
+        # Sum sizes of unique student groups only
+        total_size = sum(sg.size for sg in unique_student_groups.values())
+        
+        # Debug output: Show deduplication if multiple course units per group
+        if len(groups) > len(unique_student_groups):
+            print(f"   📊 {canonical_id}: {len(groups)} course entries → {len(unique_student_groups)} unique groups (total: {total_size} students)")
+            for group_id, course_ids in course_units_per_group.items():
+                if len(course_ids) > 1:
+                    group = unique_student_groups[group_id]
+                    print(f"      • {group.display_name} ({group.size} students): {', '.join(course_ids)}")
+        
+        # Get canonical course codes and courses (needed for course creation)
+        canonical_course_codes = CANONICAL_COURSE_MAPPING.get(canonical_id, [])
+        canonical_courses = []
+        for course_code in canonical_course_codes:
+            if course_code in courses_dict:
+                canonical_courses.append(courses_dict[course_code])
+        
+        # Merge all groups into one
+        merged_group_id = f"MERGED_{canonical_id}_T{term_number}"
+
+        merged_student_group = StudentGroup.from_dict({
+            'id': merged_group_id,
+            'batch': 'MERGED',
+            'program': 'MERGED',
+            'semester': f"S*_T{term_number}",
+            'term': f"Term{term_number}",
+            'size': total_size,
+            'course_units': [canonical_id],
+            'is_active': True
+        })
+        merged_student_groups.append(merged_student_group)
+
+        # Create merged course using helper function
+        _create_merged_course(
+            canonical_id, canonical_courses, data, courses_dict, groups,
+            merged_course_units, canonical_course_codes
+        )
+
+        merged_group_details[merged_group_id] = {
+            'canonical_id': canonical_id,
+            'groups': groups
+        }
+
+    return merged_student_groups, merged_course_units, merged_group_details
+
+
+def try_reschedule_conflict(assignment, group_time_slots, courses, lecturers, rooms, all_assignments):
+    """
+    Try to reschedule a conflicting assignment to a different time slot.
+    Prioritizes slots with at least 1 free day gap from existing sessions.
+    
+    Returns:
+        Rescheduled assignment dict if successful, None otherwise
+    """
+    from app.services.csp.domain import TimeSlot
+    
+    course = courses.get(assignment['course_id'])
+    lecturer = lecturers.get(assignment['lecturer_id'])
+    original_room = rooms.get(assignment['room_id'])
+    group_id = assignment['student_group_id']
+    group_size = assignment.get('group_size', 0)
+    
+    if not course or not lecturer:
+        return None
+    
+    # Get all rooms of the correct type
+    available_rooms = [r for r in rooms.values() 
+                      if r.room_type == course.preferred_room_type 
+                      and r.capacity >= group_size]
+    
+    if not available_rooms:
+        return None
+    
+    # Get all time slots for this course
+    DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI']
+    PERIODS = {
+        'SLOT_1': {'start': '09:00', 'end': '11:00'},
+        'SLOT_2': {'start': '11:00', 'end': '13:00'},
+        'SLOT_3': {'start': '14:00', 'end': '16:00'},
+        'SLOT_4': {'start': '16:00', 'end': '18:00'}
+    }
+    
+    # Find existing assignments for this course and group
+    existing_sessions = []
+    for a in all_assignments:
+        if a['student_group_id'] == group_id and a['course_id'] == assignment['course_id']:
+            existing_sessions.append(a)
+    
+    # Collect all candidate slots, prioritizing those with better day gaps
+    candidates = []  # List of (day, period, times, room, day_gap_score)
+    
+    for day in DAYS:
+        for period, times in PERIODS.items():
+            time_slot_str = f"{times['start']}-{times['end']}"
+            key = (group_id, day, time_slot_str)
+            
+            # Skip if this time slot is already occupied
+            if key in group_time_slots:
+                continue
+            
+            # Calculate day gap score (higher is better - prefer at least 1 day gap)
+            day_gap_score = 0
+            if existing_sessions:
+                existing_days = {a['day'] for a in existing_sessions}
+                day_index = DAYS.index(day)
+                min_gap = 10  # Large number
+                for existing_day in existing_days:
+                    existing_index = DAYS.index(existing_day)
+                    gap = abs(day_index - existing_index)
+                    min_gap = min(min_gap, gap)
+                
+                # Score: 0 if same/adjacent day, 1 if 1 day gap, 2 if 2+ day gap
+                if min_gap >= 2:
+                    day_gap_score = 2
+                elif min_gap == 1:
+                    day_gap_score = 1
+                else:
+                    day_gap_score = 0  # Same or adjacent day - not ideal but acceptable if no other option
+            else:
+                day_gap_score = 2  # No existing sessions, so any day is fine
+            
+            # Check lecturer availability
+            lecturer_busy = False
+            for a in all_assignments:
+                if (a['lecturer_id'] == lecturer.id and 
+                    a['day'] == day and 
+                    a['time_slot']['start'] == times['start']):
+                    lecturer_busy = True
+                    break
+            if lecturer_busy:
+                continue
+            
+            # Try each available room
+            for room in available_rooms:
+                # Check room availability
+                room_busy = False
+                for a in all_assignments:
+                    if (a['room_id'] == room.id and 
+                        a['day'] == day and 
+                        a['time_slot']['start'] == times['start']):
+                        room_busy = True
+                        break
+                if room_busy:
+                    continue
+                
+                # Valid candidate found
+                candidates.append((day, period, times, room, day_gap_score))
+    
+    # Sort candidates by day gap score (best first), then by day
+    candidates.sort(key=lambda x: (-x[4], x[0]))  # Negative score for descending order
+    
+    # Try candidates in order of preference
+    for day, period, times, room, day_gap_score in candidates:
+        # Create rescheduled assignment
+        rescheduled = assignment.copy()
+        rescheduled['day'] = day
+        rescheduled['room_id'] = room.id
+        rescheduled['time_slot'] = {
+            'day': day,
+            'period': period,
+            'start': times['start'],
+            'end': times['end'],
+            'is_afternoon': times['start'] >= '14:00'
+        }
+        return rescheduled
+    
+    return None
+
+
+def expand_assignment_dicts(gene, merged_group_details, original_groups_dict, courses, term_number):
+    """
+    Expand merged assignments into per-group assignments for export.
+    Creates ONE row per student group, using the canonical course ID.
+    """
+    expanded = []
+    details = merged_group_details.get(gene.student_group_id)
+
+    if not details:
+        original_group = original_groups_dict.get(gene.student_group_id)
+        course = courses.get(gene.course_unit_id)
+        if not original_group or not course:
+            return expanded
+        expanded.append({
+            'session_id': gene.session_id,
+            'student_group_id': original_group.id,
+            'student_group_name': original_group.display_name,
+            'semester': original_group.semester,
+            'term': f'Term{term_number}',
+            'group_size': original_group.size,
+            'course_id': gene.course_unit_id,
+            'lecturer_id': gene.lecturer_id,
+            'room_id': gene.room_id,
+            'day': gene.time_slot.day,
+            'time_slot': gene.time_slot.to_dict(),
+            'session_number': gene.session_number
+        })
+        return expanded
+
+    canonical_id = details['canonical_id']
+    seen_groups = set()
+    
+    for idx, group_info in enumerate(details['groups'], start=1):
+        original_group = group_info['student_group']
+        
+        if original_group.id in seen_groups:
+            continue
+        
+        seen_groups.add(original_group.id)
+        expanded.append({
+            'session_id': f"{gene.session_id}_{original_group.id}",
+            'student_group_id': original_group.id,
+            'student_group_name': original_group.display_name,
+            'semester': original_group.semester,
+            'term': f'Term{term_number}',
+            'group_size': original_group.size,
+            'course_id': canonical_id,
+            'lecturer_id': gene.lecturer_id,
+            'room_id': gene.room_id,
+            'day': gene.time_slot.day,
+            'time_slot': gene.time_slot.to_dict(),
+            'session_number': gene.session_number
+        })
+
+    return expanded
 
 def generate_term_timetable(term_number):
     """
@@ -135,16 +558,38 @@ def generate_term_timetable(term_number):
             print("❌ No student groups found!")
             return
         
+        canonical_alignment, canonical_decisions = build_canonical_term_alignment(student_groups, courses)
+        if canonical_alignment:
+            print("\n🔗 Canonical course alignment:")
+            print(f"   • {len(canonical_alignment)} canonical families forced into shared terms")
+            sample_items = list(canonical_decisions.items())[:5]
+            for canonical_id, data in sample_items:
+                print(f"     - {canonical_id}: Term {data['assigned_term']} ({data['reason']})")
+            if len(canonical_decisions) > 5:
+                print(f"     ... and {len(canonical_decisions) - 5} more canonical groups")
+            conflicts = [cid for cid, data in canonical_decisions.items() if data['conflicts']]
+            if conflicts:
+                print(f"   ⚠️ Conflicts detected for: {', '.join(conflicts)}")
+        else:
+            print("\n🔗 Canonical course alignment:")
+            print("   • No cross-program canonical courses detected for this dataset")
+
         # Collect all term-specific courses and student groups
         term_student_groups = []
-        all_term_courses = set()
         term_courses_by_group = {}
         
         print(f"\n📋 Processing student groups for Term {term_number}...")
         print("─"*70)
         
+        group_term_entries = []
+
         for student_group in student_groups:
-            term_courses = get_term_courses_for_group(student_group, courses, term_number)
+            term_courses = get_term_courses_for_group(
+                student_group,
+                courses,
+                term_number,
+                canonical_alignment=canonical_alignment
+            )
             
             if term_courses:
                 # Create term-specific student group
@@ -156,10 +601,15 @@ def generate_term_timetable(term_number):
                 
                 term_student_groups.append(term_student_group)
                 term_courses_by_group[term_student_group.id] = term_courses
+                group_term_entries.append({
+                    'original_group': student_group,
+                    'term_group': term_student_group,
+                    'term_courses': term_courses
+                })
                 
                 # Track all unique courses
                 for course in term_courses:
-                    all_term_courses.add(course.id)
+                    pass
                 
                 print(f"   ✅ {student_group.display_name}: {len(term_courses)} courses")
             else:
@@ -169,14 +619,23 @@ def generate_term_timetable(term_number):
             print(f"\n❌ No student groups have courses for Term {term_number}!")
             client.close()
             return
+
+        original_student_groups_dict = {sg.id: sg for sg in student_groups}
+        merged_student_groups, merged_course_units, merged_group_details = merge_equivalent_courses(
+            group_term_entries,
+            term_number,
+            courses
+        )
+        
+        term_student_groups = merged_student_groups
+        term_student_groups_dict = {sg.id: sg for sg in term_student_groups}
+        all_term_courses_list = merged_course_units
         
         print(f"\n📊 Summary:")
-        print(f"   • Student Groups: {len(term_student_groups)}")
-        print(f"   • Unique Courses: {len(all_term_courses)}")
-        print(f"   • Total Sessions to Schedule: {sum(len(courses) for courses in term_courses_by_group.values())}")
-        
-        # Convert all_term_courses set to list of CourseUnit objects
-        all_term_courses_list = [courses[cid] for cid in all_term_courses]
+        total_sessions_to_schedule = sum(course.sessions_required for course in merged_course_units)
+        print(f"   • Student Groups: {len(term_student_groups)} (merged)")
+        print(f"   • Unique Courses: {len(merged_course_units)}")
+        print(f"   • Total Sessions to Schedule: {total_sessions_to_schedule}")
         
         # Step 1: CSP - Generate initial timetable for ALL groups together
         print(f"\n{'='*70}")
@@ -189,7 +648,8 @@ def generate_term_timetable(term_number):
             lecturers=list(lecturers.values()),
             rooms=list(rooms.values()),
             course_units=all_term_courses_list,
-            student_groups=term_student_groups
+            student_groups=term_student_groups,
+            merged_group_details=merged_group_details
         )
         
         print("   Running CSP solver...")
@@ -227,6 +687,29 @@ def generate_term_timetable(term_number):
         
         csp_chromosome = Chromosome(id=f'CSP_Term{term_number}_Initial', genes=genes)
         
+        # Extract variable pairs and canonical course groups for GGA
+        # Use canonical course mapping as source of truth
+        variable_pairs = csp_engine.variable_pairs
+        canonical_course_groups = {}  # Canonical courses that should be scheduled together
+        
+        # Build canonical course groups using CANONICAL_COURSE_MAPPING directly
+        # Group genes by canonical ID (from the mapping)
+        from collections import defaultdict
+        canonical_genes_map = defaultdict(lambda: defaultdict(list))
+        
+        for g in genes:
+            # Get canonical ID for this course
+            canonical_id = get_canonical_id(g.course_unit_id) or g.course_unit_id
+            # Only include if it's in the canonical mapping (shared/merged courses)
+            if canonical_id in CANONICAL_COURSE_MAPPING:
+                canonical_genes_map[canonical_id][g.session_number].append(g.session_id)
+        
+        # Convert to the format GGA expects
+        for canonical_id, session_map in canonical_genes_map.items():
+            # Only include if there are multiple sessions (need to keep them together)
+            if any(len(gene_ids) > 1 for gene_ids in session_map.values()):
+                canonical_course_groups[canonical_id] = dict(session_map)
+        
         # Step 3: GGA - Optimize for soft constraints
         print(f"\n{'='*70}")
         print("🧬 Step 2: GGA Engine - Optimizing Soft Constraints")
@@ -240,7 +723,9 @@ def generate_term_timetable(term_number):
             course_units=course_units_dict,
             student_groups=student_groups_dict,
             lecturers=lecturers,
-            rooms=rooms
+            rooms=rooms,
+            variable_pairs=variable_pairs,  # Pass theory/practical pairs
+            canonical_course_groups=canonical_course_groups  # Pass canonical course groups
         )
         
         # Use more generations for comprehensive optimization (especially weekday balance)
@@ -259,33 +744,147 @@ def generate_term_timetable(term_number):
         print("📊 Step 3: Exporting Timetable")
         print("="*70)
         
-        # Create lookup dict for student groups
-        term_student_groups_dict = {sg.id: sg for sg in term_student_groups}
-        
         # Convert to assignment dicts
         assignment_dicts = []
-        for gene in optimized_chromosome.genes:
-            # Get student group info
-            sg = term_student_groups_dict.get(gene.student_group_id)
-            if not sg:
-                # Fallback if group not found
-                continue
-            
-            assignment_dicts.append({
-                'session_id': gene.session_id,
-                'student_group_id': gene.student_group_id,
-                'student_group_name': sg.display_name,
-                'semester': sg.semester,
-                'term': f'Term{term_number}',
-                'group_size': sg.size,
-                'course_id': gene.course_unit_id,
-                'lecturer_id': gene.lecturer_id,
-                'room_id': gene.room_id,
-                'day': gene.time_slot.day,
-                'time_slot': gene.time_slot.to_dict(),
-                'session_number': gene.session_number
-            })
+        # Track conflicts to prevent double-booking when expanding merged groups
+        group_time_slots = {}  # {(student_group_id, day, time_slot): [assignment_dicts]}
+        conflicts_found = 0
+        conflicts_rescheduled = 0
+        conflicts_failed = 0
+        pending_conflicts = []  # Store conflicts that need rescheduling
         
+        # First pass: collect all assignments and detect conflicts
+        for gene in optimized_chromosome.genes:
+            expanded = expand_assignment_dicts(
+                gene,
+                merged_group_details,
+                original_student_groups_dict,
+                courses,
+                term_number
+            )
+            
+            # Check for conflicts before adding
+            for assignment in expanded:
+                group_id = assignment['student_group_id']
+                day = assignment['day']
+                time_slot_str = f"{assignment['time_slot']['start']}-{assignment['time_slot']['end']}"
+                key = (group_id, day, time_slot_str)
+                
+                if key in group_time_slots:
+                    # Conflict detected - try to reschedule instead of skipping
+                    conflicting = group_time_slots[key]
+                    conflicts_found += 1
+                    print(f"   ⚠️  CONFLICT DETECTED: {group_id} has multiple courses at {day} {time_slot_str}")
+                    print(f"      Existing: {conflicting[0].get('course_id', 'unknown')}")
+                    print(f"      New: {assignment.get('course_id', 'unknown')}")
+                    # Store for rescheduling attempt
+                    pending_conflicts.append(assignment)
+                    continue
+                
+                assignment_dicts.append(assignment)
+                if key not in group_time_slots:
+                    group_time_slots[key] = []
+                group_time_slots[key].append(assignment)
+        
+        # Second pass: Try to reschedule conflicts
+        if pending_conflicts:
+            print(f"   🔄 Attempting to reschedule {len(pending_conflicts)} conflicting assignments...")
+            for conflict_assignment in pending_conflicts:
+                rescheduled = try_reschedule_conflict(
+                    conflict_assignment, 
+                    group_time_slots, 
+                    courses, 
+                    lecturers, 
+                    rooms, 
+                    assignment_dicts
+                )
+                
+                if rescheduled:
+                    # Successfully rescheduled
+                    group_id = rescheduled['student_group_id']
+                    day = rescheduled['day']
+                    time_slot_str = f"{rescheduled['time_slot']['start']}-{rescheduled['time_slot']['end']}"
+                    key = (group_id, day, time_slot_str)
+                    
+                    assignment_dicts.append(rescheduled)
+                    if key not in group_time_slots:
+                        group_time_slots[key] = []
+                    group_time_slots[key].append(rescheduled)
+                    conflicts_rescheduled += 1
+                    print(f"      ✅ Rescheduled {rescheduled['course_id']} for {group_id} to {day} {time_slot_str}")
+                else:
+                    # Failed to reschedule
+                    conflicts_failed += 1
+                    print(f"      ❌ Failed to reschedule {conflict_assignment['course_id']} for {conflict_assignment['student_group_id']}")
+        
+        # Validate before export
+        if conflicts_found > 0:
+            print(f"   📊 Conflict Resolution Summary:")
+            print(f"      • Total conflicts: {conflicts_found}")
+            print(f"      • Successfully rescheduled: {conflicts_rescheduled}")
+            print(f"      • Failed to reschedule: {conflicts_failed}")
+            if conflicts_failed > 0:
+                print(f"      ⚠️  {conflicts_failed} assignments could not be rescheduled and were removed")
+        
+        # Validate course completion: Check if all courses have required sessions
+        course_session_counts = defaultdict(lambda: defaultdict(int))  # {course_id: {group_id: count}}
+        for assignment in assignment_dicts:
+            course_id = assignment['course_id']
+            group_id = assignment['student_group_id']
+            course_session_counts[course_id][group_id] += 1
+        
+        incomplete_courses = []
+        for course_id, group_counts in course_session_counts.items():
+            course = courses.get(course_id)
+            if not course:
+                continue
+            required_sessions = course.sessions_required
+            for group_id, count in group_counts.items():
+                if count < required_sessions:
+                    incomplete_courses.append({
+                        'course_id': course_id,
+                        'course_code': course.code if course else course_id,
+                        'group_id': group_id,
+                        'required': required_sessions,
+                        'actual': count
+                    })
+        
+        if incomplete_courses:
+            print(f"   ⚠️  Found {len(incomplete_courses)} incomplete course assignments:")
+            for inc in incomplete_courses[:10]:  # Show first 10
+                print(f"      • {inc['course_code']} for {inc['group_id']}: {inc['actual']}/{inc['required']} sessions")
+            if len(incomplete_courses) > 10:
+                print(f"      ... and {len(incomplete_courses) - 10} more")
+        else:
+            print(f"   ✅ All courses have required number of sessions")
+        
+        # Additional validation: Check for room type violations
+        room_type_violations = []
+        for assignment in assignment_dicts:
+            course = courses.get(assignment['course_id'])
+            room = rooms.get(assignment['room_id'])
+            if course and room:
+                if course.preferred_room_type == 'Lab' and room.room_type != 'Lab':
+                    room_type_violations.append({
+                        'course': course.code,
+                        'room': room.room_number,
+                        'expected': 'Lab',
+                        'actual': room.room_type
+                    })
+                elif course.preferred_room_type == 'Theory' and room.room_type != 'Theory':
+                    room_type_violations.append({
+                        'course': course.code,
+                        'room': room.room_number,
+                        'expected': 'Theory',
+                        'actual': room.room_type
+                    })
+        
+        if room_type_violations:
+            print(f"   ⚠️  Found {len(room_type_violations)} room type violations in exported assignments")
+            for v in room_type_violations[:5]:  # Show first 5
+                print(f"      - {v['course']} (needs {v['expected']}) assigned to room {v['room']} ({v['actual']})")
+            if len(room_type_violations) > 5:
+                print(f"      ... and {len(room_type_violations) - 5} more")
         
         # Export
         filename = f'TIMETABLE_TERM{term_number}_COMPLETE.csv'
@@ -307,7 +906,7 @@ def generate_term_timetable(term_number):
         print(f"   • Term: Term {term_number}")
         print(f"   • Total Sessions: {len(assignment_dicts)}")
         print(f"   • Student Groups: {len(term_student_groups)}")
-        print(f"   • Unique Courses: {len(all_term_courses)}")
+        print(f"   • Unique Courses: {len(merged_course_units)}")
         print(f"   • Time Elapsed: {elapsed:.2f} seconds")
         print(f"\n📁 Output Files:")
         print(f"   • {filename}")
@@ -356,8 +955,8 @@ def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number)
                     "Start_Time": ts['start'],
                     "End_Time": ts['end'],
                     "Course_Code": course.code,
-                    "Course_Name": course.name,
-                    "Course_Type": "Lab" if course.is_lab else "Theory",
+                    "Course_Name": clean_course_name(course.name),  # Clean name without Theory/Practical
+                    "Course_Type": course.preferred_room_type,
                     "Credits": course.credits,
                     "Lecturer_ID": lecturer.id,
                     "Lecturer_Name": lecturer.name,
@@ -397,8 +996,8 @@ def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number)
                         "Start_Time": assignment['start_time'],
                         "End_Time": assignment['end_time'],
                         "Course_Code": course.code if course else "N/A",
-                        "Course_Name": course.name if course else "N/A",
-                        "Course_Type": "Lab" if course and course.is_lab else "Theory",
+                        "Course_Name": clean_course_name(course.name) if course else "N/A",  # Clean name
+                        "Course_Type": course.preferred_room_type if course else "Theory",
                         "Credits": course.credits if course else 0,
                         "Lecturer_ID": lecturer.id if lecturer else "N/A",
                         "Lecturer_Name": lecturer.name if lecturer else "N/A",

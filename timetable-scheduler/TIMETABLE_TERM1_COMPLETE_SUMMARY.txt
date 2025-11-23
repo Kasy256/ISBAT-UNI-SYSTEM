@@ -1,0 +1,66 @@
+======================================================================
+          TERM 1 TIMETABLE - COMPREHENSIVE SUMMARY
+======================================================================
+
+Generated: 2025-11-23 23:46:23
+Term: Term 1
+Total Sessions: 64
+
+======================================================================
+SESSIONS BY SEMESTER
+======================================================================
+  S1: 12 sessions
+  S2: 12 sessions
+  S3: 10 sessions
+  S4: 10 sessions
+  S5: 12 sessions
+  S6: 8 sessions
+
+======================================================================
+SESSIONS BY DAY
+======================================================================
+  MON: 13 sessions
+  TUE: 12 sessions
+  WED: 12 sessions
+  THU: 13 sessions
+  FRI: 14 sessions
+
+======================================================================
+TOP 10 COURSES (by sessions)
+======================================================================
+  BIT1208 - Object Oriented Programming Using JAVA –: 4 sessions
+  BIT1211 - Computer Hardware and Operating Systems: 4 sessions
+  BIT2115 - Web Technology: 4 sessions
+  BIT3239 - Project: 4 sessions
+  BIT2222 - Python Programming: 4 sessions
+  BIT1103 - Programming in C: 4 sessions
+  BIT1102 - Computer Organization and Architecture: 4 sessions
+  BIT1210 - Data Structures and Algorithms: 4 sessions
+  BIT2226 - DEVOPS: 4 sessions
+  BIT3129 - Programming in ASP.NET Core Using C#: 4 sessions
+
+======================================================================
+TOP 10 LECTURERS (by sessions)
+======================================================================
+  NASURUDIN KIBWIKA BASHIR: 20 sessions
+  KUKUTLA ALEKYA: 6 sessions
+  JUSTIN OPOLOT: 6 sessions
+  KENNETH KATO: 4 sessions
+  BRAVE AFRICANO: 4 sessions
+  DALLINGTON ASINGWIRE: 4 sessions
+  HENRY MALE KENNETH: 4 sessions
+  KUMAR UMESH: 4 sessions
+  WANJIRU KAMAMI WILSON: 4 sessions
+  KUMAR PRADEEP: 4 sessions
+
+======================================================================
+TOP 10 ROOMS (by usage)
+======================================================================
+  601 (Lab): 32 sessions
+  B-201 (Theory): 11 sessions
+  204 (Lab): 8 sessions
+  206 (Lab): 8 sessions
+  305 (Theory): 4 sessions
+  300 (Theory): 1 sessions
+
+======================================================================

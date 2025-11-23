@@ -120,7 +120,7 @@ def verify_hard_constraints(sessions):
         print(f"   ❌ FAILED: {capacity_violations} capacity violations")
     
     # 3. Room Type Matching
-    print("\n3. Checking: Room Type Matching (Lab courses → Lab rooms, Theory → Classroom/Lecture Hall)...")
+    print("\n3. Checking: Room Type Matching (Lab courses → Lab rooms, Theory courses → Theory rooms)...")
     room_type_violations = 0
     for session in sessions:
         course_type = session['Course_Type']
@@ -138,7 +138,7 @@ def verify_hard_constraints(sessions):
                 'room_type': room_type,
                 'severity': 'CRITICAL'
             })
-        elif course_type == 'Theory' and room_type not in ['Classroom', 'Lecture Hall', 'Seminar Room']:
+        elif course_type == 'Theory' and room_type != 'Theory':
             room_type_violations += 1
             violations.append({
                 'constraint': 'Room Type Matching',

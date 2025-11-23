@@ -15,7 +15,7 @@ def get_rooms():
     Get all rooms
     
     Query parameters:
-    - room_type: Filter by room type (Classroom, Lab, etc.)
+    - room_type: Filter by room type (Theory, Lab)
     - min_capacity: Minimum capacity
     - building: Filter by building
     - available: Filter by availability (true/false)
@@ -89,7 +89,7 @@ def create_room():
         "id": "R001",
         "room_number": "L201",
         "capacity": 60,
-        "room_type": "Classroom",
+        "room_type": "Theory",
         "building": "Main Building",
         "floor": 2,
         "facilities": ["Projector", "Whiteboard"],
@@ -110,7 +110,7 @@ def create_room():
             return jsonify({'error': 'Capacity must be greater than 0'}), 400
         
         # Validate room type
-        valid_types = ['Classroom', 'Lab', 'Lecture Hall', 'Seminar Room']
+        valid_types = ['Theory', 'Lab']
         if data['room_type'] not in valid_types:
             return jsonify({
                 'error': f'Invalid room type. Must be one of: {", ".join(valid_types)}'
@@ -155,7 +155,7 @@ def update_room(room_id):
         
         # Validate room type if provided
         if 'room_type' in data:
-            valid_types = ['Classroom', 'Lab', 'Lecture Hall', 'Seminar Room']
+            valid_types = ['Theory', 'Lab']
             if data['room_type'] not in valid_types:
                 return jsonify({
                     'error': f'Invalid room type. Must be one of: {", ".join(valid_types)}'

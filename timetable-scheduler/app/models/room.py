@@ -6,11 +6,9 @@ from enum import Enum
 
 
 class RoomType(Enum):
-    """Room types"""
-    CLASSROOM = "Classroom"
+    """Room types - only Theory and Lab"""
+    THEORY = "Theory"
     LAB = "Lab"
-    LECTURE_HALL = "Lecture Hall"
-    SEMINAR_ROOM = "Seminar Room"
 
 
 @dataclass
@@ -67,9 +65,9 @@ class Room:
         """Check if room is a lab"""
         return self.room_type == RoomType.LAB.value
     
-    def is_classroom(self) -> bool:
-        """Check if room is a classroom"""
-        return self.room_type == RoomType.CLASSROOM.value
+    def is_theory(self) -> bool:
+        """Check if room is a theory room"""
+        return self.room_type == RoomType.THEORY.value
     
     def has_facility(self, facility: str) -> bool:
         """Check if room has specific facility"""

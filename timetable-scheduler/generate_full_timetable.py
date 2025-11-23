@@ -66,7 +66,19 @@ def generate_timetable_for_group(student_group, courses, lecturers, rooms, all_a
     print(f"   Students: {student_group.size} | Courses: {len(student_group.course_units)}")
     
     # Get courses for this group
-    group_courses = [courses[cu_id] for cu_id in student_group.course_units if cu_id in courses]
+    # Handle both dict format (from database) and string format (from model)
+    course_ids = []
+    for cu in student_group.course_units:
+        if isinstance(cu, dict):
+            # Extract code from dict (code is the same as course id)
+            course_id = cu.get('code')
+            if course_id:
+                course_ids.append(course_id)
+        elif isinstance(cu, str):
+            # Already a string ID
+            course_ids.append(cu)
+    
+    group_courses = [courses[cu_id] for cu_id in course_ids if cu_id in courses]
     
     if not group_courses:
         print("   ⚠️  No courses assigned - skipping")
@@ -75,7 +87,11 @@ def generate_timetable_for_group(student_group, courses, lecturers, rooms, all_a
     # Step 1: Term splitting
     term_splitter = TermSplitter()
     try:
-        term1_plan, term2_plan = term_splitter.split_semester(student_group.semester, group_courses)
+        term1_plan, term2_plan = term_splitter.split_semester(
+            student_group.semester, 
+            group_courses,
+            program=student_group.program
+        )
     except ValueError as e:
         # If not enough courses for proper split, put all in Term1
         print(f"   ⚠️  Cannot split {len(group_courses)} courses - using all in Term1")
@@ -227,7 +243,7 @@ def export_full_timetable(all_assignments, courses, lecturers, rooms, filename='
                 "End_Time": ts['end'],
                 "Course_Code": course.code,
                 "Course_Name": course.name,
-                "Course_Type": "Lab" if course.is_lab else "Theory",
+                "Course_Type": course.preferred_room_type,
                 "Credits": course.credits,
                 "Lecturer_ID": lecturer.id,
                 "Lecturer_Name": lecturer.name,

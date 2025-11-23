@@ -137,7 +137,7 @@ def generate_timetable():
                         'id': course_unit.id,
                         'code': course_unit.code,
                         'name': course_unit.name,
-                        'is_lab': course_unit.is_lab
+                        'preferred_room_type': course_unit.preferred_room_type
                     } if course_unit else {},
                     'lecturer': {
                         'id': lecturer.id,

@@ -9,7 +9,9 @@ class GeneticOperators:
     """Genetic operators for chromosome manipulation"""
     
     def __init__(self, constraint_checker=None, lecturers: Dict = None, rooms: Dict = None,
-                 course_units: Dict = None, student_groups: Dict = None, config: Dict[str, float] = None):
+                 course_units: Dict = None, student_groups: Dict = None, config: Dict[str, float] = None,
+                 variable_pairs: Dict[str, List[str]] = None,
+                 canonical_course_groups: Dict[str, Dict[int, List[str]]] = None):
         """
         Initialize genetic operators
         
@@ -20,12 +22,16 @@ class GeneticOperators:
             course_units: Dictionary of course units by ID
             student_groups: Dictionary of student groups by ID
             config: Configuration with mutation and crossover rates
+            variable_pairs: Theory/practical pairs (gene_id -> list of paired gene_ids)
+            canonical_course_groups: Canonical course groups (canonical_id -> {session_number: [gene_ids]})
         """
         self.constraint_checker = constraint_checker
         self.lecturers = lecturers or {}
         self.rooms = rooms or {}
         self.course_units = course_units or {}
         self.student_groups = student_groups or {}
+        self.variable_pairs = variable_pairs or {}
+        self.canonical_course_groups = canonical_course_groups or {}
         
         self.config = config or {
             'mutation_rate': 0.15,
@@ -416,17 +422,17 @@ class GeneticOperators:
         
         # Get course info
         course_unit = self.course_units.get(gene.course_unit_id, {})
-        if hasattr(course_unit, 'is_lab'):
-            is_lab = course_unit.is_lab
+        if hasattr(course_unit, 'preferred_room_type'):
+            preferred_room_type = course_unit.preferred_room_type
         else:
-            is_lab = course_unit.get('is_lab', False) if isinstance(course_unit, dict) else False
+            preferred_room_type = course_unit.get('preferred_room_type', 'Theory') if isinstance(course_unit, dict) else 'Theory'
         
         # Check room type
         room_type = room.get('room_type', '')
         
-        if is_lab and room_type != 'Lab':
+        if preferred_room_type == 'Lab' and room_type != 'Lab':
             return False
-        if not is_lab and room_type == 'Lab':
+        if preferred_room_type == 'Theory' and room_type == 'Lab':
             return False
         
         return True
@@ -440,12 +446,12 @@ class GeneticOperators:
             return False
         
         # Check room type
-        course_is_lab = session.get('course_is_lab', False)
+        course_preferred_room_type = session.get('course_preferred_room_type', 'Theory')
         room_type = room.get('room_type', '')
         
-        if course_is_lab and room_type != 'Lab':
+        if course_preferred_room_type == 'Lab' and room_type != 'Lab':
             return False
-        if not course_is_lab and room_type == 'Lab':
+        if course_preferred_room_type == 'Theory' and room_type == 'Lab':
             return False
         
         return True

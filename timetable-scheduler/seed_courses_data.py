@@ -1,1825 +1,1254 @@
-"""Seed course unit data for ISBAT Timetable System"""
+"""Seed course unit data for ISBAT Timetable System - UPDATED WITH CLIENT COURSE NAMES"""
 
 from typing import List, Dict
 
 def get_all_courses() -> List[Dict]:
     """
-    Get all course unit data for Computing Faculty programs
-    Programs: BSCAIT, BCS, BML&AI, BSCE
+    Get all course unit data for Computing Faculty programs at ISBAT University Kampala
+    Programs: BSCAIT, BCS
+    All semesters S1-S6
     
-    Shared courses:
-    - CS105 (IT Fundamentals): All programs S1
-    - CS110 (Python Programming): All programs S2
-    - CS102 (Data Structures): BSCAIT & BCS S1
-    - CS103 (Database Systems): BSCAIT & BCS S1
-    - CS203 (Data Analytics): BSCAIT & BCS S3
-    - CS209 (AI Basics): BSCAIT, BCS, BML&AI S4
+    Course Structure:
+    - All courses have standardized weekly_hours: 4
+    - preferred_term is MANDATORY and must be set for all courses (Term 1 or Term 2)
+      * Frontend will require this field to be filled
+      * Term splitting is based ONLY on preferred_term from database
+      * Canonical alignment may override preferred_term for merging equivalent courses
+    - preferred_room_type is REQUIRED and must be set for all courses:
+      * "Lab" for practical/lab courses
+      * "Theory" for theory courses
+      * Users can set this in the UI when creating/editing courses
+    - Theory/Practical pairs are linked via course_group field:
+      * Courses with same course_group must be in same term
+      * They are considered as ONE course unit for term splitting
+      * Example: Programming in C Theory + Practical = 1 course unit
     
     Returns:
         List of course dictionaries ready for MongoDB insertion
     """
     courses = []
     
-    # Semester 1 Courses (Split: 3 in Term1, 2 in Term2)
+    # ========================================
+    # BSCAIT COURSES
+    # ========================================
+    
+    # Semester 1
     courses.extend([
         {
-            'id': 'CS101',
-            'code': 'CS101',
-            'name': 'Java Programming',
+            'id': 'BIT1101',
+            'code': 'BIT1101',
+            'name': 'Fundamentals of Computer and Office Applications - Theory',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Easy',
+            'is_foundational': True,
+            'prerequisites': [],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': 'BIT1101_GROUP',
+            'semester': 'S1',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT1102',
+            'code': 'BIT1102',
+            'name': 'Computer Organization and Architecture',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
             'difficulty': 'Medium',
             'is_foundational': True,
             'prerequisites': [],
             'corequisites': [],
-            'preferred_term': 'Term 1',  # Term 1
+            'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S1',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS102',
-            'code': 'CS102',
-            'name': 'Data Structures',
+            'id': 'BIT1103',
+            'code': 'BIT1103',
+            'name': 'Programming in C - Theory',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': True,
-            'prerequisites': ['CS101'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',  # Term 2 (needs CS101 first)
-            'semester': 'S1',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS103',
-            'code': 'CS103',
-            'name': 'Database Systems',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Medium',
             'is_foundational': True,
             'prerequisites': [],
             'corequisites': [],
-            'preferred_term': 'Term 1',  # Term 1
+            'preferred_term': 'Term 1',
+            'course_group': 'BIT1103_GROUP',
             'semester': 'S1',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS104',
-            'code': 'CS104',
-            'name': 'Networking',
+            'id': 'BIT1104',
+            'code': 'BIT1104',
+            'name': 'Soft Skills Development',
+            'weekly_hours': 4,
+            'credits': 2,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Easy',
+            'is_foundational': True,
+            'prerequisites': [],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S1',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT1105',
+            'code': 'BIT1105',
+            'name': 'Foundation of Mathematics & Statistics',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Medium',
             'is_foundational': True,
             'prerequisites': [],
             'corequisites': [],
-            'preferred_term': 'Term 2',  # Term 2
+            'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S1',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS105',
-            'code': 'CS105',
-            'name': 'IT Fundamentals',
+            'id': 'BIT1106',
+            'code': 'BIT1106',
+            'name': 'Fundamentals of Computer and Office Applications -- Practical',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': False,
+            'preferred_room_type': 'Lab',
             'difficulty': 'Easy',
             'is_foundational': True,
             'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 1',  # Term 1
+            'corequisites': ['BIT1101'],
+            'preferred_term': 'Term 2',
+            'course_group': 'BIT1101_GROUP',
             'semester': 'S1',
             'program': 'BSCAIT'
         },
-        # Shared: IT Fundamentals (All Computing programs)
         {
-            'id': 'CS105_SHARED',
-            'code': 'CS105',
-            'name': 'IT Fundamentals',
+            'id': 'BIT1107',
+            'code': 'BIT1107',
+            'name': 'Programming in C - Practical',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Easy',
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
             'is_foundational': True,
             'prerequisites': [],
-            'corequisites': [],
+            'corequisites': ['BIT1103'],
             'preferred_term': 'Term 1',
+            'course_group': 'BIT1103_GROUP',
             'semester': 'S1',
-            'program': 'BCS'  # Shared with BSCAIT
-        },
-        {
-            'id': 'CS105_BML',
-            'code': 'CS105',
-            'name': 'IT Fundamentals',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Easy',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S1',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'CS105_BSCE',
-            'code': 'CS105',
-            'name': 'IT Fundamentals',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Easy',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S1',
-            'program': 'BSCE'
+            'program': 'BSCAIT'
         }
     ])
     
-    # ========================================
-    # BCS Program Courses (S1)
-    # ========================================
+    # Semester 2
     courses.extend([
         {
-            'id': 'BCS101',
-            'code': 'BCS101',
-            'name': 'C++ Programming',
+            'id': 'BIT1208',
+            'code': 'BIT1208',
+            'name': 'Object Oriented Programming Using JAVA - Theory',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S1',
-            'program': 'BCS'
-        },
-        # Shared: Data Structures (BSCAIT & BCS)
-        {
-            'id': 'CS102_BCS',
-            'code': 'CS102',
-            'name': 'Data Structures',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': True,
-            'prerequisites': ['BCS101'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S1',
-            'program': 'BCS'
-        },
-        # Shared: Database Systems (BSCAIT & BCS)
-        {
-            'id': 'CS103_BCS',
-            'code': 'CS103',
-            'name': 'Database Systems',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S1',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS104',
-            'code': 'BCS104',
-            'name': 'Computer Architecture',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S1',
-            'program': 'BCS'
-        }
-    ])
-    
-    # ========================================
-    # BML&AI Program Courses (S1)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'ML101',
-            'code': 'ML101',
-            'name': 'Introduction to AI',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S1',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML102',
-            'code': 'ML102',
-            'name': 'Programming for AI',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S1',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML103',
-            'code': 'ML103',
-            'name': 'Mathematics for AI',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Hard',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S1',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML104',
-            'code': 'ML104',
-            'name': 'Statistics for Data Science',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S1',
-            'program': 'BML&AI'
-        }
-    ])
-    
-    # ========================================
-    # BSCE Program Courses (S1) - Computing-related courses
-    # ========================================
-    courses.extend([
-        {
-            'id': 'CE101',
-            'code': 'CE101',
-            'name': 'Programming Fundamentals',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S1',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE102',
-            'code': 'CE102',
-            'name': 'CAD Systems',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S1',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE103',
-            'code': 'CE103',
-            'name': 'Engineering Mathematics I',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Hard',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S1',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE104',
-            'code': 'CE104',
-            'name': 'Introduction to Civil Engineering',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Easy',
-            'is_foundational': True,
-            'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S1',
-            'program': 'BSCE'
-        }
-    ])
-    
-    # Semester 2 Courses
-    courses.extend([
-        {
-            'id': 'CS106',
-            'code': 'CS106',
-            'name': 'Operating Systems',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Medium',
             'is_foundational': False,
-            'prerequisites': ['CS105'],
+            'prerequisites': ['BIT1103', 'BIT1107'],
             'corequisites': [],
             'preferred_term': 'Term 1',
+            'course_group': 'BIT1208_GROUP',
             'semester': 'S2',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS107',
-            'code': 'CS107',
-            'name': 'Software Engineering',
+            'id': 'BIT1209',
+            'code': 'BIT1209',
+            'name': 'Fundamentals of Digital Systems',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': False,
+            'preferred_room_type': 'Lab',
             'difficulty': 'Medium',
             'is_foundational': False,
-            'prerequisites': ['CS101', 'CS102'],
+            'prerequisites': ['BIT1102'],
             'corequisites': [],
-            'preferred_term': 'Term 1',
+            'preferred_term': 'Term 2',
+            'course_group': None,
             'semester': 'S2',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS108',
-            'code': 'CS108',
-            'name': 'Web Development',
+            'id': 'BIT1210',
+            'code': 'BIT1210',
+            'name': 'Data Structures and Algorithms',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
             'is_foundational': False,
-            'prerequisites': ['CS103'],
+            'prerequisites': ['BIT1103', 'BIT1107'],
             'corequisites': [],
-            'preferred_term': 'Term 2',
+            'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S2',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS109',
-            'code': 'CS109',
-            'name': 'Cybersecurity',
+            'id': 'BIT1211',
+            'code': 'BIT1211',
+            'name': 'Computer Hardware and Operating Systems',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
             'is_foundational': False,
-            'prerequisites': ['CS104'],
+            'prerequisites': ['BIT1102'],
             'corequisites': [],
-            'preferred_term': 'Term 2',
+            'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S2',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS110',
-            'code': 'CS110',
-            'name': 'Python Programming',
+            'id': 'BIT1212',
+            'code': 'BIT1212',
+            'name': 'Database Management System - Theory',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Easy',
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
             'is_foundational': False,
-            'prerequisites': ['CS101'],
+            'prerequisites': ['BIT1102'],
             'corequisites': [],
             'preferred_term': 'Term 2',
+            'course_group': 'BIT1212_GROUP',
             'semester': 'S2',
             'program': 'BSCAIT'
         },
-        # Shared: Python Programming (All Computing programs)
         {
-            'id': 'CS110_BCS',
-            'code': 'CS110',
-            'name': 'Python Programming',
+            'id': 'BIT1213',
+            'code': 'BIT1213',
+            'name': 'Object Oriented Programming Using JAVA – Practical',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Easy',
-            'is_foundational': False,
-            'prerequisites': ['BCS101'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S2',
-            'program': 'BCS'
-        },
-        {
-            'id': 'CS110_BML',
-            'code': 'CS110',
-            'name': 'Python Programming',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Easy',
-            'is_foundational': False,
-            'prerequisites': ['ML102'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S2',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'CS110_BSCE',
-            'code': 'CS110',
-            'name': 'Python Programming',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Easy',
-            'is_foundational': False,
-            'prerequisites': ['CE101'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S2',
-            'program': 'BSCE'
-        }
-    ])
-    
-    # ========================================
-    # BCS Program Courses (S2)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'BCS201',
-            'code': 'BCS201',
-            'name': 'System Programming',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['BCS101', 'BCS104'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S2',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS202',
-            'code': 'BCS202',
-            'name': 'Software Design Patterns',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS102'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S2',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS203',
-            'code': 'BCS203',
-            'name': 'Web Technologies',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS103'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S2',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS204',
-            'code': 'BCS204',
-            'name': 'Network Programming',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['BCS201'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S2',
-            'program': 'BCS'
-        }
-    ])
-    
-    # ========================================
-    # BML&AI Program Courses (S2)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'ML201',
-            'code': 'ML201',
-            'name': 'Linear Algebra for ML',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML103'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S2',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML202',
-            'code': 'ML202',
-            'name': 'Data Science Fundamentals',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['ML104', 'CS110'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S2',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML203',
-            'code': 'ML203',
-            'name': 'Data Visualization',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS110'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S2',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML204',
-            'code': 'ML204',
-            'name': 'Probability for ML',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML104'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S2',
-            'program': 'BML&AI'
-        }
-    ])
-    
-    # ========================================
-    # BSCE Program Courses (S2)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'CE201',
-            'code': 'CE201',
-            'name': 'Structural Analysis Basics',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CE103'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S2',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE202',
-            'code': 'CE202',
-            'name': 'Engineering Software Applications',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS110'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S2',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE203',
-            'code': 'CE203',
-            'name': 'Materials Science',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CE103'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S2',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE204',
-            'code': 'CE204',
-            'name': 'Surveying',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Lab',
             'difficulty': 'Medium',
             'is_foundational': False,
             'prerequisites': [],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
+            'corequisites': ['BIT1208'],
+            'preferred_term': 'Term 1',
+            'course_group': 'BIT1208_GROUP',
             'semester': 'S2',
-            'program': 'BSCE'
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT1214',
+            'code': 'BIT1214',
+            'name': 'Database Management System -Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BIT1212'],
+            'preferred_term': 'Term 2',
+            'course_group': 'BIT1212_GROUP',
+            'semester': 'S2',
+            'program': 'BSCAIT'
         }
     ])
     
-    # Semester 3 Courses
+    # Semester 3
     courses.extend([
         {
-            'id': 'CS201',
-            'code': 'CS201',
-            'name': 'Mobile App Development',
+            'id': 'BIT2115',
+            'code': 'BIT2115',
+            'name': 'Web Technology- Theory',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Medium',
             'is_foundational': False,
-            'prerequisites': ['CS101', 'CS110'],
+            'prerequisites': ['BIT1208', 'BIT1213'],
             'corequisites': [],
             'preferred_term': 'Term 1',
+            'course_group': 'BIT2115_GROUP',
             'semester': 'S3',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS202',
-            'code': 'CS202',
-            'name': 'Networking II',
+            'id': 'BIT2116',
+            'code': 'BIT2116',
+            'name': 'Data Communication & Networking',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Lab',
             'difficulty': 'Hard',
             'is_foundational': False,
-            'prerequisites': ['CS104'],
+            'prerequisites': ['BIT1211'],
             'corequisites': [],
             'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S3',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS203',
-            'code': 'CS203',
-            'name': 'Data Analytics',
+            'id': 'BIT2117',
+            'code': 'BIT2117',
+            'name': 'Software Engineering & Project Management',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Medium',
             'is_foundational': False,
-            'prerequisites': ['CS103', 'CS110'],
+            'prerequisites': ['BIT1210'],
             'corequisites': [],
             'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S3',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS204',
-            'code': 'CS204',
-            'name': 'Cloud Computing',
+            'id': 'BIT2118',
+            'code': 'BIT2118',
+            'name': 'Linux Administration -Theory',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Medium',
             'is_foundational': False,
-            'prerequisites': ['CS106', 'CS104'],
+            'prerequisites': ['BIT1211'],
             'corequisites': [],
             'preferred_term': 'Term 2',
+            'course_group': 'BIT2118_GROUP',
             'semester': 'S3',
             'program': 'BSCAIT'
         },
         {
-            'id': 'CS205',
-            'code': 'CS205',
-            'name': 'C Programming',
+            'id': 'BIT2119',
+            'code': 'BIT2119',
+            'name': 'Graphics and Multimedia Systems',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': ['BIT1208'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S3',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT2120',
+            'code': 'BIT2120',
+            'name': 'Web Technology- Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BIT2115'],
+            'preferred_term': 'Term 1',
+            'course_group': 'BIT2115_GROUP',
+            'semester': 'S3',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT2121',
+            'code': 'BIT2121',
+            'name': 'Linux Administration - Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BIT2118'],
+            'preferred_term': 'Term 2',
+            'course_group': 'BIT2118_GROUP',
+            'semester': 'S3',
+            'program': 'BSCAIT'
+        }
+    ])
+    
+    # Semester 4
+    courses.extend([
+        {
+            'id': 'BIT2222',
+            'code': 'BIT2222',
+            'name': 'Python Programming-Theory',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': ['BIT1208'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': 'BIT2222_GROUP',
+            'semester': 'S4',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT2223',
+            'code': 'BIT2223',
+            'name': 'Artificial Intelligence',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
             'difficulty': 'Hard',
             'is_foundational': False,
-            'prerequisites': ['CS101'],
+            'prerequisites': ['BIT1210'],
             'corequisites': [],
             'preferred_term': 'Term 2',
-            'semester': 'S3',
+            'course_group': None,
+            'semester': 'S4',
             'program': 'BSCAIT'
         },
-        # Shared: Data Analytics (BSCAIT & BCS)
         {
-            'id': 'CS203_BCS',
-            'code': 'CS203',
-            'name': 'Data Analytics',
+            'id': 'BIT2224',
+            'code': 'BIT2224',
+            'name': 'Internet of Things',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
             'is_foundational': False,
-            'prerequisites': ['CS103', 'CS110'],
+            'prerequisites': ['BIT2116'],
             'corequisites': [],
             'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S4',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT2225',
+            'code': 'BIT2225',
+            'name': 'Virtualization and Cloud Computing -Theory',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BIT2116'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': 'BIT2225_GROUP',
+            'semester': 'S4',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT2226',
+            'code': 'BIT2226',
+            'name': 'DEVOPS',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BIT2117', 'BIT2121'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S4',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT2227',
+            'code': 'BIT2227',
+            'name': 'Python Programming-Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BIT2222'],
+            'preferred_term': 'Term 1',
+            'course_group': 'BIT2222_GROUP',
+            'semester': 'S4',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT2228',
+            'code': 'BIT2228',
+            'name': 'Virtualization and Cloud Computing - Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BIT2225'],
+            'preferred_term': 'Term 2',
+            'course_group': 'BIT2225_GROUP',
+            'semester': 'S4',
+            'program': 'BSCAIT'
+        }
+    ])
+    
+    # Semester 5
+    courses.extend([
+        {
+            'id': 'BIT3129',
+            'code': 'BIT3129',
+            'name': 'Programming in ASP.NET Core Using C# - Theory',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BIT1208', 'BIT1212'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': 'BIT3129_GROUP',
+            'semester': 'S5',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT3130',
+            'code': 'BIT3130',
+            'name': 'Business Intelligence and Analytics',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BIT1212', 'BIT1214'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S5',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT3131',
+            'code': 'BIT3131',
+            'name': 'Mobile Application Development Using Android Technology - Theory',
+            'weekly_hours': 4,
+            'credits': 3,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BIT1208', 'BIT2115'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': 'BIT3131_GROUP',
+            'semester': 'S5',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT3132',
+            'code': 'BIT3132',
+            'name': 'Web and Database Security',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BIT1212', 'BIT2115'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S5',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT3133',
+            'code': 'BIT3133',
+            'name': 'Programming in ASP.NET Core Using C# - Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BIT3129'],
+            'preferred_term': 'Term 1',
+            'course_group': 'BIT3129_GROUP',
+            'semester': 'S5',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT3134',
+            'code': 'BIT3134',
+            'name': 'Mobile Application Development Using Android Technology - Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BIT3131'],
+            'preferred_term': 'Term 2',
+            'course_group': 'BIT3131_GROUP',
+            'semester': 'S5',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT3135',
+            'code': 'BIT3135',
+            'name': 'Research Paper',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S5',
+            'program': 'BSCAIT'
+        }
+    ])
+    
+    # Semester 6
+    courses.extend([
+        {
+            'id': 'BIT3236',
+            'code': 'BIT3236',
+            'name': 'Green Computing',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': ['BIT2225'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S6',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT3237',
+            'code': 'BIT3237',
+            'name': 'Technological Entrepreneurship',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Easy',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S6',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT3238',
+            'code': 'BIT3238',
+            'name': 'Digital Marketing',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Easy',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S6',
+            'program': 'BSCAIT'
+        },
+        {
+            'id': 'BIT3239',
+            'code': 'BIT3239',
+            'name': 'Project',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BIT3135'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S6',
+            'program': 'BSCAIT'
+        }
+    ])
+    
+    # ========================================
+    # BCS COURSES
+    # ========================================
+    
+    # Semester 1
+    courses.extend([
+        {
+            'id': 'BCS1101',
+            'code': 'BCS1101',
+            'name': 'Fundamentals of Computer and Office Applications - Theory',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Easy',
+            'is_foundational': True,
+            'prerequisites': [],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S1',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS1102',
+            'code': 'BCS1102',
+            'name': 'Computer Organization and Architecture',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': True,
+            'prerequisites': [],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S1',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS1103',
+            'code': 'BCS1103',
+            'name': 'Programming in C - Theory',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
+            'is_foundational': True,
+            'prerequisites': [],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': 'BCS1103_GROUP',
+            'semester': 'S1',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS1104',
+            'code': 'BCS1104',
+            'name': 'Programming in C - Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': True,
+            'prerequisites': [],
+            'corequisites': ['BCS1103'],
+            'preferred_term': 'Term 1',
+            'course_group': 'BCS1103_GROUP',
+            'semester': 'S1',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS1105',
+            'code': 'BCS1105',
+            'name': 'Soft Skills Development',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Easy',
+            'is_foundational': True,
+            'prerequisites': [],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S1',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS1106',
+            'code': 'BCS1106',
+            'name': 'Foundation of Mathematics & Statistics',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
+            'is_foundational': True,
+            'prerequisites': [],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S1',
+            'program': 'BCS'
+        }
+    ])
+    
+    # Semester 2
+    courses.extend([
+        {
+            'id': 'BCS1207',
+            'code': 'BCS1207',
+            'name': 'Fundamentals of Digital Systems',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': ['BCS1102'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S2',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS1208',
+            'code': 'BCS1208',
+            'name': 'Object Oriented Programming Using Java - Theory',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': ['BCS1103', 'BCS1104'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': 'BCS1208_GROUP',
+            'semester': 'S2',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS1209',
+            'code': 'BCS1209',
+            'name': 'Object Oriented Programming Using JAVA – Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BCS1208'],
+            'preferred_term': 'Term 1',
+            'course_group': 'BCS1208_GROUP',
+            'semester': 'S2',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS1210',
+            'code': 'BCS1210',
+            'name': 'Data Structures and Algorithms',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BCS1103', 'BCS1104'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S2',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS1211',
+            'code': 'BCS1211',
+            'name': 'Computer Hardware and Operating Systems',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BCS1102'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S2',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS1212',
+            'code': 'BCS1212',
+            'name': 'Database Management System - Theory',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': ['BCS1102'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S2',
+            'program': 'BCS'
+        }
+    ])
+    
+    # Semester 3
+    courses.extend([
+        {
+            'id': 'BCS2113',
+            'code': 'BCS2113',
+            'name': 'Introduction to Cyber Security',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BCS1211'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S3',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS2114',
+            'code': 'BCS2114',
+            'name': 'Web Technology- Theory',
+            'weekly_hours': 4,
+            'credits': 3,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': ['BCS1208', 'BCS1209'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': 'BCS2114_GROUP',
+            'semester': 'S3',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS2115',
+            'code': 'BCS2115',
+            'name': 'Web Technology- Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BCS2114'],
+            'preferred_term': 'Term 1',
+            'course_group': 'BCS2114_GROUP',
+            'semester': 'S3',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS2116',
+            'code': 'BCS2116',
+            'name': 'Artificial Intelligence',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BCS1210'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S3',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS2117',
+            'code': 'BCS2117',
+            'name': 'Graphics and Multimedia Systems',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': ['BCS1208'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S3',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS2118',
+            'code': 'BCS2118',
+            'name': 'Software Engineering & Project Management',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': ['BCS1210'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S3',
             'program': 'BCS'
         }
     ])
     
-    # ========================================
-    # BCS Program Courses (S3)
-    # ========================================
+    # Semester 4
     courses.extend([
         {
-            'id': 'BCS301',
-            'code': 'BCS301',
-            'name': 'Advanced Algorithms',
+            'id': 'BCS2219',
+            'code': 'BCS2219',
+            'name': 'Theories of Computation',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Hard',
             'is_foundational': False,
-            'prerequisites': ['CS102'],
+            'prerequisites': ['BCS1210'],
             'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S3',
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S4',
             'program': 'BCS'
         },
         {
-            'id': 'BCS302',
-            'code': 'BCS302',
+            'id': 'BCS2220',
+            'code': 'BCS2220',
+            'name': 'Python Programming-Theory',
+            'weekly_hours': 4,
+            'credits': 3,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': ['BCS1208'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': 'BCS2220_GROUP',
+            'semester': 'S4',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS2221',
+            'code': 'BCS2221',
+            'name': 'Python Programming-Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Medium',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BCS2220'],
+            'preferred_term': 'Term 1',
+            'course_group': 'BCS2220_GROUP',
+            'semester': 'S4',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS2222',
+            'code': 'BCS2222',
+            'name': 'Data Science Algorithms and Tools',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BCS1212', 'BCS2220'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S4',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS2223',
+            'code': 'BCS2223',
+            'name': 'Game Programming',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BCS2117'],
+            'corequisites': [],
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S4',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS2224',
+            'code': 'BCS2224',
+            'name': 'DEVOPS',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BCS2118'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': None,
+            'semester': 'S4',
+            'program': 'BCS'
+        }
+    ])
+    
+    # Semester 5
+    courses.extend([
+        {
+            'id': 'BCS3125',
+            'code': 'BCS3125',
+            'name': 'Programming in ASP.NET Core Using C# - Theory',
+            'weekly_hours': 4,
+            'credits': 3,
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': ['BCS1208', 'BCS1212'],
+            'corequisites': [],
+            'preferred_term': 'Term 1',
+            'course_group': 'BCS3125_GROUP',
+            'semester': 'S5',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS3126',
+            'code': 'BCS3126',
+            'name': 'Programming in ASP.NET Core Using C# - Practical',
+            'weekly_hours': 4,
+            'credits': 4,
+            'preferred_room_type': 'Lab',
+            'difficulty': 'Hard',
+            'is_foundational': False,
+            'prerequisites': [],
+            'corequisites': ['BCS3125'],
+            'preferred_term': 'Term 1',
+            'course_group': 'BCS3125_GROUP',
+            'semester': 'S5',
+            'program': 'BCS'
+        },
+        {
+            'id': 'BCS3127',
+            'code': 'BCS3127',
             'name': 'Compiler Design',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Lab',
             'difficulty': 'Hard',
             'is_foundational': False,
-            'prerequisites': ['BCS201', 'CS102'],
+            'prerequisites': ['BCS2219'],
             'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S3',
+            'preferred_term': 'Term 2',
+            'course_group': None,
+            'semester': 'S5',
             'program': 'BCS'
         },
         {
-            'id': 'BCS303',
-            'code': 'BCS303',
-            'name': 'Distributed Systems',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['BCS204'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S3',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS304',
-            'code': 'BCS304',
-            'name': 'Software Quality Assurance',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['BCS202'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S3',
-            'program': 'BCS'
-        }
-    ])
-    
-    # ========================================
-    # BML&AI Program Courses (S3)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'ML301',
-            'code': 'ML301',
-            'name': 'Machine Learning Basics',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML201', 'ML202'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S3',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML302',
-            'code': 'ML302',
-            'name': 'Deep Learning Fundamentals',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML301'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S3',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML303',
-            'code': 'ML303',
-            'name': 'Natural Language Processing',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML301'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S3',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML304',
-            'code': 'ML304',
-            'name': 'Computer Vision Basics',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML302'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S3',
-            'program': 'BML&AI'
-        }
-    ])
-    
-    # ========================================
-    # BSCE Program Courses (S3)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'CE301',
-            'code': 'CE301',
-            'name': 'Concrete Technology',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CE203'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S3',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE302',
-            'code': 'CE302',
-            'name': 'Geotechnical Engineering',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CE201'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S3',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE303',
-            'code': 'CE303',
-            'name': 'Structural Design I',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CE201'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S3',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE304',
-            'code': 'CE304',
-            'name': 'Fluid Mechanics',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CE103'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S3',
-            'program': 'BSCE'
-        }
-    ])
-    
-    # Semester 4 Courses
-    courses.extend([
-        {
-            'id': 'CS206',
-            'code': 'CS206',
-            'name': 'Advanced Python',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS110'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S4',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS207',
-            'code': 'CS207',
-            'name': 'Web Development II',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS108'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S4',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS208',
-            'code': 'CS208',
-            'name': 'Cybersecurity II',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CS109'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS209',
-            'code': 'CS209',
-            'name': 'AI Basics',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CS102', 'CS110'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS210',
-            'code': 'CS210',
-            'name': 'Project Management',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Easy',
-            'is_foundational': False,
-            'prerequisites': ['CS107'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BSCAIT'
-        },
-        # Shared: AI Basics (BSCAIT, BCS, BML&AI)
-        {
-            'id': 'CS209_BCS',
-            'code': 'CS209',
-            'name': 'AI Basics',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CS102', 'CS110'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BCS'
-        },
-        {
-            'id': 'CS209_BML',
-            'code': 'CS209',
-            'name': 'AI Basics',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML302'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BML&AI'
-        }
-    ])
-    
-    # ========================================
-    # BCS Program Courses (S4)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'BCS401',
-            'code': 'BCS401',
-            'name': 'Operating Systems Design',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['BCS302'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S4',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS402',
-            'code': 'BCS402',
-            'name': 'Computer Graphics',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['BCS301'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S4',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS403',
-            'code': 'BCS403',
-            'name': 'Parallel Computing',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['BCS303'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS404',
-            'code': 'BCS404',
-            'name': 'Software Project Management',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['BCS202'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BCS'
-        }
-    ])
-    
-    # ========================================
-    # BML&AI Program Courses (S4)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'ML401',
-            'code': 'ML401',
-            'name': 'Advanced Machine Learning',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML301'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S4',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML402',
-            'code': 'ML402',
-            'name': 'Reinforcement Learning',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML302'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S4',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML403',
-            'code': 'ML403',
-            'name': 'Advanced NLP',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML303'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML404',
-            'code': 'ML404',
-            'name': 'Advanced Computer Vision',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML304'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BML&AI'
-        }
-    ])
-    
-    # ========================================
-    # BSCE Program Courses (S4)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'CE401',
-            'code': 'CE401',
-            'name': 'Highway Engineering',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CE204'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S4',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE402',
-            'code': 'CE402',
-            'name': 'Water Resources Engineering',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CE304'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S4',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE403',
-            'code': 'CE403',
-            'name': 'Structural Design II',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CE303'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE404',
-            'code': 'CE404',
-            'name': 'Construction Management',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CE103'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S4',
-            'program': 'BSCE'
-        }
-    ])
-    
-    # Semester 5 Courses
-    courses.extend([
-        {
-            'id': 'CS301',
-            'code': 'CS301',
+            'id': 'BCS3128',
+            'code': 'BCS3128',
             'name': 'Machine Learning',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Lab',
             'difficulty': 'Hard',
             'is_foundational': False,
-            'prerequisites': ['CS209', 'CS203'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S5',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS302',
-            'code': 'CS302',
-            'name': 'Big Data',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CS203', 'CS204'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S5',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS303',
-            'code': 'CS303',
-            'name': 'DevOps',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS106', 'CS204'],
+            'prerequisites': ['BCS2116', 'BCS2222'],
             'corequisites': [],
             'preferred_term': 'Term 2',
-            'semester': 'S5',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS304',
-            'code': 'CS304',
-            'name': 'Blockchain',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CS109', 'CS205'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S5',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS305',
-            'code': 'CS305',
-            'name': 'Enterprise Systems',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS103', 'CS107'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S5',
-            'program': 'BSCAIT'
-        }
-    ])
-    
-    # ========================================
-    # BCS Program Courses (S5)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'BCS501',
-            'code': 'BCS501',
-            'name': 'Information Security',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['BCS303'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S5',
             'program': 'BCS'
         },
         {
-            'id': 'BCS502',
-            'code': 'BCS502',
-            'name': 'Mobile Computing',
+            'id': 'BCS3129',
+            'code': 'BCS3129',
+            'name': 'Mobile Application Development Using Android Technology - Theory',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['BCS203'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S5',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS503',
-            'code': 'BCS503',
-            'name': 'Cloud Computing Systems',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Hard',
             'is_foundational': False,
-            'prerequisites': ['BCS403'],
+            'prerequisites': ['BCS1208', 'BCS2114'],
             'corequisites': [],
             'preferred_term': 'Term 2',
+            'course_group': None,
             'semester': 'S5',
             'program': 'BCS'
         },
         {
-            'id': 'BCS504',
-            'code': 'BCS504',
-            'name': 'Database Administration',
+            'id': 'BCS3130',
+            'code': 'BCS3130',
+            'name': 'Research Paper',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Medium',
             'is_foundational': False,
-            'prerequisites': ['CS103'],
+            'prerequisites': [],
             'corequisites': [],
-            'preferred_term': 'Term 2',
+            'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S5',
             'program': 'BCS'
         }
     ])
     
-    # ========================================
-    # BML&AI Program Courses (S5)
-    # ========================================
+    # Semester 6
     courses.extend([
         {
-            'id': 'ML501',
-            'code': 'ML501',
-            'name': 'Deep Learning Applications',
+            'id': 'BCS3231',
+            'code': 'BCS3231',
+            'name': 'New Product Development and Innovation',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML302', 'ML401'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S5',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML502',
-            'code': 'ML502',
-            'name': 'Neural Networks',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML302'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S5',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML503',
-            'code': 'ML503',
-            'name': 'Big Data Analytics',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML202', 'CS203'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S5',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML504',
-            'code': 'ML504',
-            'name': 'AI Ethics and Governance',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS209'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S5',
-            'program': 'BML&AI'
-        }
-    ])
-    
-    # ========================================
-    # BSCE Program Courses (S5)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'CE501',
-            'code': 'CE501',
-            'name': 'Structural Engineering',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CE403'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S5',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE502',
-            'code': 'CE502',
-            'name': 'Environmental Engineering',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CE402'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S5',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE503',
-            'code': 'CE503',
-            'name': 'Transportation Engineering',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CE401'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S5',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE504',
-            'code': 'CE504',
-            'name': 'Project Management for Engineers',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CE404'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S5',
-            'program': 'BSCE'
-        }
-    ])
-    
-    # Semester 6 Courses
-    courses.extend([
-        {
-            'id': 'CS306',
-            'code': 'CS306',
-            'name': 'Capstone Project',
-            'weekly_hours': 6,
-            'credits': 6,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CS301', 'CS302', 'CS303'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S6',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS307',
-            'code': 'CS307',
-            'name': 'AI Applications',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CS301'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S6',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS308',
-            'code': 'CS308',
-            'name': 'Advanced Networking',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CS202', 'CS208'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S6',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS309',
-            'code': 'CS309',
-            'name': 'Software Testing',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS107'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S6',
-            'program': 'BSCAIT'
-        },
-        {
-            'id': 'CS310',
-            'code': 'CS310',
-            'name': 'IT Governance',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CS210', 'CS305'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S6',
-            'program': 'BSCAIT'
-        }
-    ])
-    
-    # ========================================
-    # BCS Program Courses (S6)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'BCS601',
-            'code': 'BCS601',
-            'name': 'Capstone Project',
-            'weekly_hours': 6,
-            'credits': 6,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['BCS401', 'BCS402'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S6',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS602',
-            'code': 'BCS602',
-            'name': 'Advanced System Design',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['BCS401'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S6',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS603',
-            'code': 'BCS603',
-            'name': 'Enterprise Architecture',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['BCS503'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S6',
-            'program': 'BCS'
-        },
-        {
-            'id': 'BCS604',
-            'code': 'BCS604',
-            'name': 'IT Professional Practice',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Easy',
             'is_foundational': False,
-            'prerequisites': ['BCS404'],
+            'prerequisites': [],
             'corequisites': [],
             'preferred_term': 'Term 2',
+            'course_group': None,
             'semester': 'S6',
             'program': 'BCS'
-        }
-    ])
-    
-    # ========================================
-    # BML&AI Program Courses (S6)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'ML601',
-            'code': 'ML601',
-            'name': 'AI Capstone Project',
-            'weekly_hours': 6,
-            'credits': 6,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML501', 'ML502'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S6',
-            'program': 'BML&AI'
         },
         {
-            'id': 'ML602',
-            'code': 'ML602',
-            'name': 'Advanced AI Systems',
+            'id': 'BCS3232',
+            'code': 'BCS3232',
+            'name': 'Virtualization and Cloud Computing -Theory',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': True,
+            'preferred_room_type': 'Theory',
             'difficulty': 'Hard',
             'is_foundational': False,
-            'prerequisites': ['ML501'],
-            'corequisites': [],
-            'preferred_term': 'Term 1',
-            'semester': 'S6',
-            'program': 'BML&AI'
-        },
-        {
-            'id': 'ML603',
-            'code': 'ML603',
-            'name': 'AI Deployment and Production',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['ML503'],
+            'prerequisites': ['BCS2224'],
             'corequisites': [],
             'preferred_term': 'Term 2',
+            'course_group': None,
             'semester': 'S6',
-            'program': 'BML&AI'
+            'program': 'BCS'
         },
         {
-            'id': 'ML604',
-            'code': 'ML604',
-            'name': 'Research Methods in AI',
+            'id': 'BCS3233',
+            'code': 'BCS3233',
+            'name': 'Digital Marketing',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
+            'preferred_room_type': 'Theory',
+            'difficulty': 'Easy',
             'is_foundational': False,
-            'prerequisites': ['ML504'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S6',
-            'program': 'BML&AI'
-        }
-    ])
-    
-    # ========================================
-    # BSCE Program Courses (S6)
-    # ========================================
-    courses.extend([
-        {
-            'id': 'CE601',
-            'code': 'CE601',
-            'name': 'Capstone Design Project',
-            'weekly_hours': 6,
-            'credits': 6,
-            'is_lab': True,
-            'difficulty': 'Hard',
-            'is_foundational': False,
-            'prerequisites': ['CE501', 'CE502'],
+            'prerequisites': [],
             'corequisites': [],
             'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S6',
-            'program': 'BSCE'
+            'program': 'BCS'
         },
         {
-            'id': 'CE602',
-            'code': 'CE602',
-            'name': 'Advanced Structural Design',
+            'id': 'BCS3234',
+            'code': 'BCS3234',
+            'name': 'Project',
             'weekly_hours': 4,
             'credits': 4,
-            'is_lab': False,
+            'preferred_room_type': 'Lab',
             'difficulty': 'Hard',
             'is_foundational': False,
-            'prerequisites': ['CE501'],
+            'prerequisites': ['BCS3130'],
             'corequisites': [],
             'preferred_term': 'Term 1',
+            'course_group': None,
             'semester': 'S6',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE603',
-            'code': 'CE603',
-            'name': 'Infrastructure Planning',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CE503'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S6',
-            'program': 'BSCE'
-        },
-        {
-            'id': 'CE604',
-            'code': 'CE604',
-            'name': 'Professional Engineering Practice',
-            'weekly_hours': 4,
-            'credits': 4,
-            'is_lab': False,
-            'difficulty': 'Medium',
-            'is_foundational': False,
-            'prerequisites': ['CE504'],
-            'corequisites': [],
-            'preferred_term': 'Term 2',
-            'semester': 'S6',
-            'program': 'BSCE'
+            'program': 'BCS'
         }
     ])
     
@@ -1837,8 +1266,8 @@ def seed_courses_to_db(db):
     result = db.course_units.insert_many(courses_data)
     
     print(f"✅ Successfully seeded {len(result.inserted_ids)} courses")
-    print(f"   - Lab courses: {sum(1 for c in courses_data if c['is_lab'])}")
-    print(f"   - Theory courses: {sum(1 for c in courses_data if not c['is_lab'])}")
+    print(f"   - Lab courses: {sum(1 for c in courses_data if c.get('preferred_room_type') == 'Lab')}")
+    print(f"   - Theory courses: {sum(1 for c in courses_data if c.get('preferred_room_type') == 'Theory')}")
     print(f"   - Foundational: {sum(1 for c in courses_data if c['is_foundational'])}")
     
     return result
@@ -1851,9 +1280,10 @@ def get_course_statistics():
     stats = {
         'total_courses': len(courses_data),
         'by_semester': {},
+        'by_program': {},
         'by_type': {
-            'Lab': sum(1 for c in courses_data if c['is_lab']),
-            'Theory': sum(1 for c in courses_data if not c['is_lab'])
+            'Lab': sum(1 for c in courses_data if c.get('preferred_room_type') == 'Lab'),
+            'Theory': sum(1 for c in courses_data if c.get('preferred_room_type') == 'Theory')
         },
         'by_difficulty': {
             'Easy': sum(1 for c in courses_data if c['difficulty'] == 'Easy'),
@@ -1866,7 +1296,9 @@ def get_course_statistics():
     
     for course in courses_data:
         sem = course['semester']
+        prog = course['program']
         stats['by_semester'][sem] = stats['by_semester'].get(sem, 0) + 1
+        stats['by_program'][prog] = stats['by_program'].get(prog, 0) + 1
     
     return stats
 
@@ -1875,9 +1307,13 @@ if __name__ == '__main__':
     stats = get_course_statistics()
     
     print("\n" + "="*60)
-    print("ISBAT COURSE STATISTICS")
+    print("ISBAT COURSE STATISTICS - UPDATED WITH CLIENT COURSE NAMES")
     print("="*60)
     print(f"\n📚 Total Courses: {stats['total_courses']}")
+    
+    print(f"\n📊 By Program:")
+    for prog in sorted(stats['by_program'].keys()):
+        print(f"   - {prog}: {stats['by_program'][prog]} courses")
     
     print(f"\n📊 By Semester:")
     for sem in sorted(stats['by_semester'].keys()):
@@ -1898,4 +1334,3 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     print("✅ Course data ready for seeding!")
     print("="*60 + "\n")
-

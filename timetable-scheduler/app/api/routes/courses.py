@@ -39,10 +39,18 @@ def create_course():
     try:
         data = request.get_json()
         
-        required = ['id', 'code', 'name', 'weekly_hours', 'credits', 'is_lab']
+        required = ['id', 'code', 'name', 'weekly_hours', 'credits']
         for field in required:
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # preferred_room_type is required
+        if 'preferred_room_type' not in data or data['preferred_room_type'] is None:
+            # Backward compatibility: derive from is_lab if available
+            if 'is_lab' in data:
+                data['preferred_room_type'] = "Lab" if data['is_lab'] else "Theory"
+            else:
+                return jsonify({'error': 'Missing required field: preferred_room_type'}), 400
         
         course = CourseUnit.from_dict(data)
         

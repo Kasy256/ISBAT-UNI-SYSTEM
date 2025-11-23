@@ -1,432 +1,488 @@
-"""Seed student group data for ISBAT Timetable System"""
+"""Seed student group data for ISBAT Timetable System - UPDATED WITH REAL COURSES"""
 
 from typing import List, Dict
 
-def get_all_student_groups() -> List[Dict]:
-    """
-    Get all student group data for Computing Faculty programs
-    Programs: BSCAIT, BCS, BML&AI, BSCE
-    All semesters S1-S6 for Term 1 testing
-    
-    Note: No term splits included - the preprocessor will automatically
-    split courses into terms based on its intelligence
-    
-    Returns:
-        List of student group dictionaries ready for MongoDB insertion
-    """
-    student_groups = []
-    
-    # ========================================
-    # BSCAIT-126 Batch (2024/2025 intake)
-    # ========================================
-    
-    # Semester 1
-    student_groups.append({
-        'id': 'SG_BSCAIT_126_S1',
-        'batch': 'BSCAIT-126',
-        'program': 'BSCAIT',
-        'semester': 'S1',
-        'term': None,  # Preprocessor will split into terms
-        'size': 50,
-        'course_units': ['CS101', 'CS102', 'CS103', 'CS104', 'CS105'],
-        'academic_year': '2024/2025',
-        'is_active': True
-    })
-    
-    # Semester 2
-    student_groups.append({
-        'id': 'SG_BSCAIT_126_S2',
-        'batch': 'BSCAIT-126',
-        'program': 'BSCAIT',
-        'semester': 'S2',
-        'term': None,
-        'size': 45,
-        'course_units': ['CS106', 'CS107', 'CS108', 'CS109', 'CS110'],
-        'academic_year': '2025/2026',
-        'is_active': True
-    })
-    
-    # Semester 3
-    student_groups.append({
-        'id': 'SG_BSCAIT_126_S3',
-        'batch': 'BSCAIT-126',
-        'program': 'BSCAIT',
-        'semester': 'S3',
-        'term': None,
-        'size': 40,
-        'course_units': ['CS201', 'CS202', 'CS203', 'CS204', 'CS205'],
-        'academic_year': '2026/2027',
-        'is_active': True
-    })
-    
-    # Semester 4
-    student_groups.append({
-        'id': 'SG_BSCAIT_126_S4',
-        'batch': 'BSCAIT-126',
-        'program': 'BSCAIT',
-        'semester': 'S4',
-        'term': None,
-        'size': 35,
-        'course_units': ['CS206', 'CS207', 'CS208', 'CS209', 'CS210'],
-        'academic_year': '2027/2028',
-        'is_active': True
-    })
-    
-    # Semester 5
-    student_groups.append({
-        'id': 'SG_BSCAIT_126_S5',
-        'batch': 'BSCAIT-126',
-        'program': 'BSCAIT',
-        'semester': 'S5',
-        'term': None,
-        'size': 20,
-        'course_units': ['CS301', 'CS302', 'CS303', 'CS304', 'CS305'],
-        'academic_year': '2028/2029',
-        'is_active': True
-    })
-    
-    # Semester 6
-    student_groups.append({
-        'id': 'SG_BSCAIT_126_S6',
-        'batch': 'BSCAIT-126',
-        'program': 'BSCAIT',
-        'semester': 'S6',
-        'term': None,
-        'size': 20,
-        'course_units': ['CS306', 'CS307', 'CS308', 'CS309', 'CS310'],
-        'academic_year': '2029/2030',
-        'is_active': True
-    })
-    
-    # ========================================
-    # BSCAIT-226 Batch (2026/2027 intake)
-    # ========================================
-    
-    # Semester 1
-    student_groups.append({
-        'id': 'SG_BSCAIT_226_S1',
-        'batch': 'BSCAIT-226',
-        'program': 'BSCAIT',
-        'semester': 'S1',
-        'term': None,
-        'size': 28,
-        'course_units': ['CS101', 'CS102', 'CS103', 'CS104', 'CS105'],
-        'academic_year': '2026/2027',
-        'is_active': True
-    })
-    
-    # Semester 2
-    student_groups.append({
-        'id': 'SG_BSCAIT_226_S2',
-        'batch': 'BSCAIT-226',
-        'program': 'BSCAIT',
-        'semester': 'S2',
-        'term': None,
-        'size': 28,
-        'course_units': ['CS106', 'CS107', 'CS108', 'CS109', 'CS110'],
-        'academic_year': '2027/2028',
-        'is_active': True
-    })
-    
-    # Semester 3
-    student_groups.append({
-        'id': 'SG_BSCAIT_226_S3',
-        'batch': 'BSCAIT-226',
-        'program': 'BSCAIT',
-        'semester': 'S3',
-        'term': None,
-        'size': 26,
-        'course_units': ['CS201', 'CS202', 'CS203', 'CS204', 'CS205'],
-        'academic_year': '2028/2029',
-        'is_active': True
-    })
-    
-    # Semester 4
-    student_groups.append({
-        'id': 'SG_BSCAIT_226_S4',
-        'batch': 'BSCAIT-226',
-        'program': 'BSCAIT',
-        'semester': 'S4',
-        'term': None,
-        'size': 26,
-        'course_units': ['CS206', 'CS207', 'CS208', 'CS209', 'CS210'],
-        'academic_year': '2029/2030',
-        'is_active': True
-    })
-    
-    # Semester 5
-    student_groups.append({
-        'id': 'SG_BSCAIT_226_S5',
-        'batch': 'BSCAIT-226',
-        'program': 'BSCAIT',
-        'semester': 'S5',
-        'term': None,
-        'size': 24,
-        'course_units': ['CS301', 'CS302', 'CS303', 'CS304', 'CS305'],
-        'academic_year': '2030/2031',
-        'is_active': True
-    })
-    
-    # Semester 6
-    student_groups.append({
-        'id': 'SG_BSCAIT_226_S6',
-        'batch': 'BSCAIT-226',
-        'program': 'BSCAIT',
-        'semester': 'S6',
-        'term': None,
-        'size': 24,
-        'course_units': ['CS306', 'CS307', 'CS308', 'CS309', 'CS310'],
-        'academic_year': '2031/2032',
-        'is_active': True
-    })
-    
-    # ========================================
-    # BCS Program - Batch BCS-126 (2024/2025 intake)
-    # ========================================
-    
-    # Semester 1 - Shares CS102, CS103, CS105 with BSCAIT
-    student_groups.append({
-        'id': 'SG_BCS_126_S1',
-        'batch': 'BCS-126',
-        'program': 'BCS',
-        'semester': 'S1',
-        'term': None,
-        'size': 45,
-        'course_units': ['BCS101', 'CS102', 'CS103', 'BCS104', 'CS105'],  # Shared: CS102, CS103, CS105
-        'academic_year': '2024/2025',
-        'is_active': True
-    })
-    
-    # Semester 2 - Shares CS110 with all programs
-    student_groups.append({
-        'id': 'SG_BCS_126_S2',
-        'batch': 'BCS-126',
-        'program': 'BCS',
-        'semester': 'S2',
-        'term': None,
-        'size': 40,
-        'course_units': ['BCS201', 'BCS202', 'BCS203', 'BCS204', 'CS110'],  # Shared: CS110
-        'academic_year': '2025/2026',
-        'is_active': True
-    })
-    
-    # Semester 3 - Shares CS203 with BSCAIT
-    student_groups.append({
-        'id': 'SG_BCS_126_S3',
-        'batch': 'BCS-126',
-        'program': 'BCS',
-        'semester': 'S3',
-        'term': None,
-        'size': 35,
-        'course_units': ['BCS301', 'BCS302', 'CS203', 'BCS303', 'BCS304'],  # Shared: CS203
-        'academic_year': '2026/2027',
-        'is_active': True
-    })
-    
-    # Semester 4 - Shares CS209 with BSCAIT and BML&AI
-    student_groups.append({
-        'id': 'SG_BCS_126_S4',
-        'batch': 'BCS-126',
-        'program': 'BCS',
-        'semester': 'S4',
-        'term': None,
-        'size': 30,
-        'course_units': ['BCS401', 'BCS402', 'BCS403', 'BCS404', 'CS209'],  # Shared: CS209
-        'academic_year': '2027/2028',
-        'is_active': True
-    })
-    
-    # Semester 5
-    student_groups.append({
-        'id': 'SG_BCS_126_S5',
-        'batch': 'BCS-126',
-        'program': 'BCS',
-        'semester': 'S5',
-        'term': None,
-        'size': 25,
-        'course_units': ['BCS501', 'BCS502', 'BCS503', 'BCS504'],
-        'academic_year': '2028/2029',
-        'is_active': True
-    })
-    
-    # Semester 6
-    student_groups.append({
-        'id': 'SG_BCS_126_S6',
-        'batch': 'BCS-126',
-        'program': 'BCS',
-        'semester': 'S6',
-        'term': None,
-        'size': 22,
-        'course_units': ['BCS601', 'BCS602', 'BCS603', 'BCS604'],
-        'academic_year': '2029/2030',
-        'is_active': True
-    })
-    
-    # ========================================
-    # BML&AI Program - Batch BML-126 (2024/2025 intake)
-    # ========================================
-    
-    # Semester 1 - Shares CS105 with all programs
-    student_groups.append({
-        'id': 'SG_BML_126_S1',
-        'batch': 'BML-126',
-        'program': 'BML&AI',
-        'semester': 'S1',
-        'term': None,
-        'size': 35,
-        'course_units': ['ML101', 'ML102', 'ML103', 'ML104', 'CS105'],  # Shared: CS105
-        'academic_year': '2024/2025',
-        'is_active': True
-    })
-    
-    # Semester 2 - Shares CS110 with all programs
-    student_groups.append({
-        'id': 'SG_BML_126_S2',
-        'batch': 'BML-126',
-        'program': 'BML&AI',
-        'semester': 'S2',
-        'term': None,
-        'size': 32,
-        'course_units': ['ML201', 'ML202', 'ML203', 'ML204', 'CS110'],  # Shared: CS110
-        'academic_year': '2025/2026',
-        'is_active': True
-    })
-    
-    # Semester 3
-    student_groups.append({
-        'id': 'SG_BML_126_S3',
-        'batch': 'BML-126',
-        'program': 'BML&AI',
-        'semester': 'S3',
-        'term': None,
-        'size': 28,
-        'course_units': ['ML301', 'ML302', 'ML303', 'ML304'],
-        'academic_year': '2026/2027',
-        'is_active': True
-    })
-    
-    # Semester 4 - Shares CS209 with BSCAIT and BCS
-    student_groups.append({
-        'id': 'SG_BML_126_S4',
-        'batch': 'BML-126',
-        'program': 'BML&AI',
-        'semester': 'S4',
-        'term': None,
-        'size': 25,
-        'course_units': ['ML401', 'ML402', 'ML403', 'ML404', 'CS209'],  # Shared: CS209
-        'academic_year': '2027/2028',
-        'is_active': True
-    })
-    
-    # Semester 5
-    student_groups.append({
-        'id': 'SG_BML_126_S5',
-        'batch': 'BML-126',
-        'program': 'BML&AI',
-        'semester': 'S5',
-        'term': None,
-        'size': 20,
-        'course_units': ['ML501', 'ML502', 'ML503', 'ML504'],
-        'academic_year': '2028/2029',
-        'is_active': True
-    })
-    
-    # Semester 6
-    student_groups.append({
-        'id': 'SG_BML_126_S6',
-        'batch': 'BML-126',
-        'program': 'BML&AI',
-        'semester': 'S6',
-        'term': None,
-        'size': 18,
-        'course_units': ['ML601', 'ML602', 'ML603', 'ML604'],
-        'academic_year': '2029/2030',
-        'is_active': True
-    })
-    
-    # ========================================
-    # BSCE Program - Batch BSCE-126 (2024/2025 intake)
-    # ========================================
-    
-    # Semester 1 - Shares CS105 with all programs
-    student_groups.append({
-        'id': 'SG_BSCE_126_S1',
-        'batch': 'BSCE-126',
-        'program': 'BSCE',
-        'semester': 'S1',
-        'term': None,
-        'size': 60,  # Larger group to test split rules
-        'course_units': ['CE101', 'CE102', 'CE103', 'CE104', 'CS105'],  # Shared: CS105
-        'academic_year': '2024/2025',
-        'is_active': True
-    })
-    
-    # Semester 2 - Shares CS110 with all programs
-    student_groups.append({
-        'id': 'SG_BSCE_126_S2',
-        'batch': 'BSCE-126',
-        'program': 'BSCE',
-        'semester': 'S2',
-        'term': None,
-        'size': 55,  # Larger group to test split rules
-        'course_units': ['CE201', 'CE202', 'CE203', 'CE204', 'CS110'],  # Shared: CS110
-        'academic_year': '2025/2026',
-        'is_active': True
-    })
-    
-    # Semester 3
-    student_groups.append({
-        'id': 'SG_BSCE_126_S3',
-        'batch': 'BSCE-126',
-        'program': 'BSCE',
-        'semester': 'S3',
-        'term': None,
-        'size': 50,
-        'course_units': ['CE301', 'CE302', 'CE303', 'CE304'],
-        'academic_year': '2026/2027',
-        'is_active': True
-    })
-    
-    # Semester 4
-    student_groups.append({
-        'id': 'SG_BSCE_126_S4',
-        'batch': 'BSCE-126',
-        'program': 'BSCE',
-        'semester': 'S4',
-        'term': None,
-        'size': 45,
-        'course_units': ['CE401', 'CE402', 'CE403', 'CE404'],
-        'academic_year': '2027/2028',
-        'is_active': True
-    })
-    
-    # Semester 5
-    student_groups.append({
-        'id': 'SG_BSCE_126_S5',
-        'batch': 'BSCE-126',
-        'program': 'BSCE',
-        'semester': 'S5',
-        'term': None,
-        'size': 40,
-        'course_units': ['CE501', 'CE502', 'CE503', 'CE504'],
-        'academic_year': '2028/2029',
-        'is_active': True
-    })
-    
-    # Semester 6
-    student_groups.append({
-        'id': 'SG_BSCE_126_S6',
-        'batch': 'BSCE-126',
-        'program': 'BSCE',
-        'semester': 'S6',
-        'term': None,
-        'size': 35,
-        'course_units': ['CE601', 'CE602', 'CE603', 'CE604'],
-        'academic_year': '2029/2030',
-        'is_active': True
-    })
-    
-    return student_groups
+def get_all_student_groups():
+
+    return [
+
+
+
+        # ======================================================
+
+        # BSCAIT-126 (Bachelor of Applied Information Technology)
+
+        # ======================================================
+
+
+
+        {
+
+            'id': 'SG_BSCAIT_126_S1',
+
+            'batch': 'BSCAIT-126',
+
+            'program': 'BSCAIT',
+
+            'semester': 'S1',
+
+            'term': None,
+
+            'size': 32,
+
+            'course_units': [
+
+                {'code': 'BIT1101', 'name': 'Basics of Computer and Office Application -Theory'},
+
+                {'code': 'BIT1102', 'name': 'Computer Organization and Architecture'},
+
+                {'code': 'BIT1103', 'name': 'Problem Solving Methodologies Using C - Theory'},
+
+                {'code': 'BIT1104', 'name': 'Soft Skills Development'},
+
+                {'code': 'BIT1105', 'name': 'Mathematics & Statistical Foundation for IT'},
+
+                {'code': 'BIT1106', 'name': 'Basics of Computer and Office Application – Practical'},
+
+                {'code': 'BIT1107', 'name': 'Programming in C - Practical'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        {
+
+            'id': 'SG_BSCAIT_126_S2',
+
+            'batch': 'BSCAIT-126',
+
+            'program': 'BSCAIT',
+
+            'semester': 'S2',
+
+            'term': None,
+
+            'size': 31,
+
+            'course_units': [
+
+                {'code': 'BIT1208', 'name': 'Object Oriented Programming Using JAVA - Theory'},
+
+                {'code': 'BIT1209', 'name': 'Fundamentals of Digital Systems'},
+
+                {'code': 'BIT1210', 'name': 'Data Structures and Algorithms'},
+
+                {'code': 'BIT1211', 'name': 'Computer Hardware and Operating Systems'},
+
+                {'code': 'BIT1212', 'name': 'RDBMS Using MS-SQL Server - Theory'},
+
+                {'code': 'BIT1213', 'name': 'Object Oriented Programming Using JAVA – Practical'},
+
+                {'code': 'BIT1214', 'name': 'RDBMS Using MS-SQL Server -Practical'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        {
+
+            'id': 'SG_BSCAIT_126_S3',
+
+            'batch': 'BSCAIT-126',
+
+            'program': 'BSCAIT',
+
+            'semester': 'S3',
+
+            'term': None,
+
+            'size': 30,
+
+            'course_units': [
+
+                {'code': 'BIT2115', 'name': 'Web Design- Theory'},
+
+                {'code': 'BIT2116', 'name': 'Data Communication & Networking'},
+
+                {'code': 'BIT2117', 'name': 'Software Engineering & Project Management'},
+
+                {'code': 'BIT2118', 'name': 'Linux Administration'},
+
+                {'code': 'BIT2119', 'name': 'Graphics and Multimedia Systems'},
+
+                {'code': 'BIT2120', 'name': 'Web Design- Practical'},
+
+                {'code': 'BIT2121', 'name': 'Linux Administration - Practical'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        {
+
+            'id': 'SG_BSCAIT_126_S4',
+
+            'batch': 'BSCAIT-126',
+
+            'program': 'BSCAIT',
+
+            'semester': 'S4',
+
+            'term': None,
+
+            'size': 29,
+
+            'course_units': [
+
+                {'code': 'BIT2222', 'name': 'Python Programming-Theory'},
+
+                {'code': 'BIT2223', 'name': 'Artificial Intelligence'},
+
+                {'code': 'BIT2224', 'name': 'Internet of Things'},
+
+                {'code': 'BIT2225', 'name': 'Virtualization and Cloud Computing'},
+
+                {'code': 'BIT2226', 'name': 'DevOps'},
+
+                {'code': 'BIT2227', 'name': 'Python Programming-Practical'},
+
+                {'code': 'BIT2228', 'name': 'Virtualization and Cloud Computing - Practical'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        {
+
+            'id': 'SG_BSCAIT_126_S5',
+
+            'batch': 'BSCAIT-126',
+
+            'program': 'BSCAIT',
+
+            'semester': 'S5',
+
+            'term': None,
+
+            'size': 28,
+
+            'course_units': [
+
+                {'code': 'BIT3129', 'name': 'Programming in ASP.Net Core Using C# - Theory'},
+
+                {'code': 'BIT3130', 'name': 'Business Intelligence and Analytics'},
+
+                {'code': 'BIT3131', 'name': 'Mobile Application Development Using Android Technology - Theory'},
+
+                {'code': 'BIT3132', 'name': 'Web and Database Security'},
+
+                {'code': 'BIT3133', 'name': 'Programming in Asp.Net Core Using C# - Practical'},
+
+                {'code': 'BIT3134', 'name': 'Mobile Application Development Using Android Technology - Practical'},
+
+                {'code': 'BIT3135', 'name': 'Research Paper'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        {
+
+            'id': 'SG_BSCAIT_126_S6',
+
+            'batch': 'BSCAIT-126',
+
+            'program': 'BSCAIT',
+
+            'semester': 'S6',
+
+            'term': None,
+
+            'size': 27,
+
+            'course_units': [
+
+                {'code': 'BIT3236', 'name': 'Green Computing'},
+
+                {'code': 'BIT3237', 'name': 'Technological Entrepreneurship'},
+
+                {'code': 'BIT3238', 'name': 'Digital Marketing'},
+
+                {'code': 'BIT3239', 'name': 'Project'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        # ===========================================
+
+        # BCS-126 (Bachelor of Computer Science)
+
+        # ===========================================
+
+
+
+        {
+
+            'id': 'SG_BCS_126_S1',
+
+            'batch': 'BCS-126',
+
+            'program': 'BCS',
+
+            'semester': 'S1',
+
+            'term': None,
+
+            'size': 40,
+
+            'course_units': [
+
+                {'code': 'BCS1101', 'name': 'Fundamentals of Computer & Office Applications'},
+
+                {'code': 'BCS1102', 'name': 'Computer Organization and Architecture'},
+
+                {'code': 'BCS1103', 'name': 'Programming in C Theory'},
+
+                {'code': 'BCS1104', 'name': 'Programming in C Practical'},
+
+                {'code': 'BCS1105', 'name': 'Soft Skills Development'},
+
+                {'code': 'BCS1106', 'name': 'Foundation of Mathematics & Statistics'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        {
+
+            'id': 'SG_BCS_126_S2',
+
+            'batch': 'BCS-126',
+
+            'program': 'BCS',
+
+            'semester': 'S2',
+
+            'term': None,
+
+            'size': 39,
+
+            'course_units': [
+
+                {'code': 'BCS1207', 'name': 'Fundamentals of Digital Systems'},
+
+                {'code': 'BCS1208', 'name': 'Object Oriented Programming Using Java - Theory'},
+
+                {'code': 'BCS1209', 'name': 'Object Oriented Programming Using Java - Practical'},
+
+                {'code': 'BCS1210', 'name': 'Data Structures and Algorithms'},
+
+                {'code': 'BCS1211', 'name': 'Operating Systems'},
+
+                {'code': 'BCS1212', 'name': 'Database Management System'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        {
+
+            'id': 'SG_BCS_126_S3',
+
+            'batch': 'BCS-126',
+
+            'program': 'BCS',
+
+            'semester': 'S3',
+
+            'term': None,
+
+            'size': 38,
+
+            'course_units': [
+
+                {'code': 'BCS2113', 'name': 'Introduction to Cyber Security'},
+
+                {'code': 'BCS2114', 'name': 'Web Technology- Theory'},
+
+                {'code': 'BCS2115', 'name': 'Web Technology- Practical'},
+
+                {'code': 'BCS2116', 'name': 'Artificial Intelligence'},
+
+                {'code': 'BCS2117', 'name': 'Graphics and Multimedia Systems'},
+
+                {'code': 'BCS2118', 'name': 'Software Engineering and Professional Practice'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        {
+
+            'id': 'SG_BCS_126_S4',
+
+            'batch': 'BCS-126',
+
+            'program': 'BCS',
+
+            'semester': 'S4',
+
+            'term': None,
+
+            'size': 37,
+
+            'course_units': [
+
+                {'code': 'BCS2219', 'name': 'Theories of Computation'},
+
+                {'code': 'BCS2220', 'name': 'Python Programming-Theory'},
+
+                {'code': 'BCS2221', 'name': 'Python Programming-Practical'},
+
+                {'code': 'BCS2222', 'name': 'Data Science Algorithms and Tools'},
+
+                {'code': 'BCS2223', 'name': 'Game Programming'},
+
+                {'code': 'BCS2224', 'name': 'DEVOPS'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        {
+
+            'id': 'SG_BCS_126_S5',
+
+            'batch': 'BCS-126',
+
+            'program': 'BCS',
+
+            'semester': 'S5',
+
+            'term': None,
+
+            'size': 36,
+
+            'course_units': [
+
+                {'code': 'BCS3125', 'name': 'Programming in ASP.NET Core Using C# - Theory'},
+
+                {'code': 'BCS3126', 'name': 'Programming in ASP.NET Core Using C# - Practical'},
+
+                {'code': 'BCS3127', 'name': 'Compiler Design'},
+
+                {'code': 'BCS3128', 'name': 'Machine Learning'},
+
+                {'code': 'BCS3129', 'name': 'Mobile Application Development Using Android Technology'},
+
+                {'code': 'BCS3130', 'name': 'Research Paper'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+        {
+
+            'id': 'SG_BCS_126_S6',
+
+            'batch': 'BCS-126',
+
+            'program': 'BCS',
+
+            'semester': 'S6',
+
+            'term': None,
+
+            'size': 35,
+
+            'course_units': [
+
+                {'code': 'BCS3231', 'name': 'New Product Development and Innovation'},
+
+                {'code': 'BCS3232', 'name': 'Virtualization and Cloud Computing'},
+
+                {'code': 'BCS3233', 'name': 'Digital Marketing'},
+
+                {'code': 'BCS3234', 'name': 'Project'},
+
+            ],
+
+            'academic_year': '2024/2025',
+
+            'is_active': True
+
+        },
+
+
+
+    ]
 
 
 def seed_student_groups_to_db(db):
@@ -440,15 +496,53 @@ def seed_student_groups_to_db(db):
     result = db.student_groups.insert_many(groups_data)
     
     print(f"✅ Successfully seeded {len(result.inserted_ids)} student groups")
-    print(f"   - BSCAIT-126 Batch: {sum(1 for g in groups_data if g['batch'] == 'BSCAIT-126')} semesters")
-    print(f"   - BSCAIT-226 Batch: {sum(1 for g in groups_data if g['batch'] == 'BSCAIT-226')} semesters")
-    print(f"   - BCS-126 Batch: {sum(1 for g in groups_data if g['batch'] == 'BCS-126')} semesters")
-    print(f"   - BML-126 Batch: {sum(1 for g in groups_data if g['batch'] == 'BML-126')} semesters")
-    print(f"   - BSCE-126 Batch: {sum(1 for g in groups_data if g['batch'] == 'BSCE-126')} semesters")
-    print(f"   - Total Students: {sum(g['size'] for g in groups_data)}")
+    print(f"   - BSCAIT-126 Batch: {sum(1 for g in groups_data if g.get('batch') == 'BSCAIT-126')} semesters")
+    print(f"   - BCS-126 Batch: {sum(1 for g in groups_data if g.get('batch') == 'BCS-126')} semesters")
+    print(f"   - BML-126 Batch: {sum(1 for g in groups_data if g.get('batch') == 'BML-126')} semesters")
+    print(f"   - BSCE-126 Batch: {sum(1 for g in groups_data if g.get('batch') == 'BSCE-126')} semesters")
+    print(f"   - Total Students: {sum(g.get('size', 0) for g in groups_data)}")
+    print(f"\n📚 Course Structure:")
+    print(f"   - S1-S5: 5 course units per semester")
+    print(f"   - S6: 4 course units (including Final Year Project)")
+    print(f"   - Shared courses across programs for efficient timetabling")
     print(f"   - Note: Term splits will be handled by preprocessor")
     
     return result
+
+
+def get_shared_courses_summary():
+    """Get a summary of shared courses across programs"""
+    groups_data = get_all_student_groups()
+    
+    # Track course usage
+    course_usage = {}
+    
+    for group in groups_data:
+        # Handle new format where course_units can be dicts with 'code' and 'name'
+        for course_item in group['course_units']:
+            # Extract course code from dict or use string directly
+            if isinstance(course_item, dict):
+                course_code = course_item.get('code')
+            else:
+                course_code = course_item
+            
+            if course_code and course_code not in course_usage:
+                course_usage[course_code] = []
+            if course_code:
+                course_usage[course_code].append({
+                    'program': group['program'],
+                    'semester': group['semester'],
+                    'batch': group['batch']
+                })
+    
+    # Find shared courses (used by multiple programs)
+    shared_courses = {
+        course: usage 
+        for course, usage in course_usage.items() 
+        if len(set(u['program'] for u in usage)) > 1
+    }
+    
+    return shared_courses
 
 
 def get_student_group_statistics():
@@ -459,30 +553,30 @@ def get_student_group_statistics():
         'total_groups': len(groups_data),
         'by_batch': {},
         'by_semester': {},
-        'by_term': {},
         'total_students': sum(g['size'] for g in groups_data),
-        'total_course_enrollments': sum(len(g['course_units']) for g in groups_data),
+        'total_course_enrollments': sum(len(g['course_units']) for g in groups_data),  # Count individual courses
         'avg_group_size': sum(g['size'] for g in groups_data) / len(groups_data)
     }
     
     for group in groups_data:
-        batch = group['batch']
-        semester = group['semester']
-        term = group['term']
+        batch = group.get('batch')
+        semester = group.get('semester')
         
-        stats['by_batch'][batch] = stats['by_batch'].get(batch, 0) + 1
-        stats['by_semester'][semester] = stats['by_semester'].get(semester, 0) + 1
-        stats['by_term'][term] = stats['by_term'].get(term, 0) + 1
+        if batch:
+            stats['by_batch'][batch] = stats['by_batch'].get(batch, 0) + 1
+        if semester:
+            stats['by_semester'][semester] = stats['by_semester'].get(semester, 0) + 1
     
     return stats
 
 
 if __name__ == '__main__':
     stats = get_student_group_statistics()
+    shared = get_shared_courses_summary()
     
-    print("\n" + "="*60)
-    print("ISBAT STUDENT GROUP STATISTICS")
-    print("="*60)
+    print("\n" + "="*70)
+    print("ISBAT UNIVERSITY - STUDENT GROUP DATA (UPDATED WITH REAL COURSES)")
+    print("="*70)
     print(f"\n👥 Total Student Groups: {stats['total_groups']} (semester groups)")
     
     print(f"\n📚 By Batch:")
@@ -490,28 +584,36 @@ if __name__ == '__main__':
         count = stats['by_batch'][batch]
         print(f"   - {batch}: {count} semesters")
     
-    print(f"\n📚 By Program:")
+    print(f"\n📊 By Program:")
+    groups_data = get_all_student_groups()
     by_program = {}
     for group in groups_data:
-        program = group['program']
-        by_program[program] = by_program.get(program, 0) + 1
+        program = group.get('program')
+        if program:
+            by_program[program] = by_program.get(program, 0) + 1
     for program in sorted(by_program.keys()):
         print(f"   - {program}: {by_program[program]} groups")
-    
-    print(f"\n📊 By Semester:")
-    for sem in sorted(stats['by_semester'].keys()):
-        print(f"   - {sem}: {stats['by_semester'][sem]} groups")
     
     print(f"\n🎓 Student Statistics:")
     print(f"   - Total Students: {stats['total_students']}")
     print(f"   - Average Group Size: {stats['avg_group_size']:.1f}")
     print(f"   - Total Course Enrollments: {stats['total_course_enrollments']}")
     
+    print(f"\n🔗 Shared Courses (for efficient timetabling):")
+    print(f"   - Total shared courses: {len(shared)}")
+    for course_code in sorted(shared.keys())[:10]:  # Show first 10
+        programs = set(u['program'] for u in shared[course_code])
+        print(f"   - {course_code}: Shared by {', '.join(sorted(programs))}")
+    
+    print(f"\n📋 Course Structure:")
+    print(f"   - Semesters 1-5: 5 course units each")
+    print(f"   - Semester 6: 4 course units (including PRJ601 - Final Year Project)")
+    print(f"   - All S6 groups include mandatory Final Year Project")
+    
     print(f"\n⚙️  Preprocessing:")
     print(f"   - Term splitting: Handled by preprocessor")
     print(f"   - Course distribution: Automatic based on constraints")
     
-    print("\n" + "="*60)
+    print("\n" + "="*70)
     print("✅ Student group data ready for seeding!")
-    print("="*60 + "\n")
-
+    print("="*70 + "\n")
