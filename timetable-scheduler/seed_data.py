@@ -27,7 +27,7 @@ def seed_all():
     
     # Connect to MongoDB
     try:
-        mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
+        mongo_uri = os.getenv('MONGO_URI', 'mongodb+srv://philiphinny436:hinny123@cluster0.h3zklgk.mongodb.net/')
         db_name = os.getenv('MONGO_DB_NAME', 'timetable_scheduler')
         client = MongoClient(mongo_uri)
         db = client[db_name]
