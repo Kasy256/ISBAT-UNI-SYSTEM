@@ -31,8 +31,10 @@ from app.services.canonical_courses import get_canonical_id, CANONICAL_COURSE_MA
 
 def setup_database():
     """Connect to MongoDB"""
-    client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=5000)
-    db = client['timetable_scheduler']
+    mongo_uri = Config.MONGO_URI
+    db_name = Config.MONGO_DB_NAME
+    client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+    db = client[db_name]
     return client, db
 
 def fetch_all_data(db):

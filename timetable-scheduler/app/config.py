@@ -11,7 +11,7 @@ class Config:
     DEBUG = os.getenv('FLASK_DEBUG', 'True') == 'True'
     
     # MongoDB
-    MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
+    MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://philiphinny436:hinny123@cluster0.h3zklgk.mongodb.net/')
     MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'timetable_scheduler')
     
     # CSP Configuration

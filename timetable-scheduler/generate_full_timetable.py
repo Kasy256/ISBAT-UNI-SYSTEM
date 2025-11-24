@@ -22,8 +22,10 @@ from app.config import Config
 
 def setup_database():
     """Connect to MongoDB and seed data if needed"""
-    client = MongoClient('mongodb://localhost:27017/', serverSelectionTimeoutMS=5000)
-    db = client['timetable_scheduler']
+    mongo_uri = Config.MONGO_URI
+    db_name = Config.MONGO_DB_NAME
+    client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+    db = client[db_name]
     
     print("\n" + "="*70)
     print("          COMPREHENSIVE UNIVERSITY TIMETABLE GENERATION")
