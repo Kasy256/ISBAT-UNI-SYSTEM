@@ -2,7 +2,7 @@
           TERM 1 TIMETABLE - COMPREHENSIVE SUMMARY
 ======================================================================
 
-Generated: 2025-11-24 16:49:44
+Generated: 2025-11-25 08:18:20
 Term: Term 1
 Total Sessions: 62
 
@@ -19,25 +19,25 @@ SESSIONS BY SEMESTER
 ======================================================================
 SESSIONS BY DAY
 ======================================================================
-  MON: 13 sessions
-  TUE: 11 sessions
-  WED: 12 sessions
+  MON: 14 sessions
+  TUE: 12 sessions
+  WED: 11 sessions
   THU: 12 sessions
-  FRI: 14 sessions
+  FRI: 13 sessions
 
 ======================================================================
 TOP 10 COURSES (by sessions)
 ======================================================================
-  BIT1208 - Object Oriented Programming Using JAVA –: 4 sessions
-  BIT1211 - Computer Hardware and Operating Systems: 4 sessions
-  BIT2115 - Web Technology: 4 sessions
-  BIT3239 - Project: 4 sessions
   BIT1103 - Programming in C: 4 sessions
   BIT1102 - Computer Organization and Architecture: 4 sessions
+  BIT1208 - Object Oriented Programming Using JAVA –: 4 sessions
   BIT1210 - Data Structures and Algorithms: 4 sessions
+  BIT1211 - Computer Hardware and Operating Systems: 4 sessions
+  BIT2115 - Web Technology: 4 sessions
   BIT2222 - Python Programming: 4 sessions
   BIT2226 - DEVOPS: 4 sessions
   BIT3129 - Programming in ASP.NET Core Using C#: 4 sessions
+  BIT3239 - Project: 4 sessions
 
 ======================================================================
 TOP 10 LECTURERS (by sessions)
@@ -58,11 +58,10 @@ TOP 10 ROOMS (by usage)
 ======================================================================
   601 (Lab): 32 sessions
   206 (Lab): 9 sessions
-  305 (Theory): 9 sessions
-  204 (Lab): 5 sessions
-  700 (Theory): 4 sessions
+  602 (Theory): 8 sessions
+  B-201 (Theory): 6 sessions
+  406 (Lab): 5 sessions
   300 (Theory): 1 sessions
-  301 (Theory): 1 sessions
-  501 (Theory): 1 sessions
+  305 (Theory): 1 sessions
 
 ======================================================================

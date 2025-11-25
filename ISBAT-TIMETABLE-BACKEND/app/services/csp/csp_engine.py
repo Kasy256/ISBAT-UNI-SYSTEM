@@ -1051,6 +1051,9 @@ class CSPEngine:
             time_slot_usage[time_key] += 1
         
         # LCV Heuristic: Order by room type priority + least constraining value + merge preference + time distribution
+        # Get group size for capacity-based prioritization
+        group_size = self.constraint_context.student_groups.get(variable.student_group_id, {}).get('size', 0)
+        
         if len(values) > 100:
             def score_value(value_tuple):
                 if len(value_tuple) == 4:
@@ -1063,6 +1066,16 @@ class CSPEngine:
                 time_key = f"{time_slot.day}_{time_slot.period}"
                 room = self.constraint_context.rooms.get(room_id)
                 room_capacity = room.get('capacity', 0) if room else 0
+                
+                # CRITICAL: Prioritize rooms with sufficient capacity for the group
+                # This prevents the solver from getting stuck trying small rooms
+                if room_capacity < group_size:
+                    score += 10000  # Heavily penalize rooms that are too small
+                elif room_capacity >= group_size:
+                    # Prefer rooms that fit the group but aren't excessively large
+                    # This helps with resource utilization
+                    excess_capacity = room_capacity - group_size
+                    score += excess_capacity * 0.1  # Small penalty for excess capacity
                 
                 # Time distribution: Prefer less-used time slots
                 current_usage = time_slot_usage.get(time_key, 0)
@@ -1117,6 +1130,16 @@ class CSPEngine:
                 time_key = f"{time_slot.day}_{time_slot.period}"
                 room = self.constraint_context.rooms.get(room_id)
                 room_capacity = room.get('capacity', 0) if room else 0
+                
+                # CRITICAL: Prioritize rooms with sufficient capacity for the group
+                # This prevents the solver from getting stuck trying small rooms
+                if room_capacity < group_size:
+                    score += 10000  # Heavily penalize rooms that are too small
+                elif room_capacity >= group_size:
+                    # Prefer rooms that fit the group but aren't excessively large
+                    # This helps with resource utilization
+                    excess_capacity = room_capacity - group_size
+                    score += excess_capacity * 0.1  # Small penalty for excess capacity
                 
                 # Time distribution: Prefer less-used time slots
                 current_usage = time_slot_usage.get(time_key, 0)

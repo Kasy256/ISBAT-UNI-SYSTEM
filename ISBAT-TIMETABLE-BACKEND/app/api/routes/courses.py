@@ -39,7 +39,7 @@ def create_course():
     try:
         data = request.get_json()
         
-        required = ['id', 'code', 'name', 'weekly_hours', 'credits']
+        required = ['id', 'code', 'name', 'weekly_hours']
         for field in required:
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400

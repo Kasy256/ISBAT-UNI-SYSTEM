@@ -1,0 +1,336 @@
+{
+  "timestamp": "2025-11-25T08:18:23.673249",
+  "total_violations": 39,
+  "by_severity": {
+    "WARNING": 39
+  },
+  "by_constraint": {
+    "weekly_limit": 1,
+    "daily_limit": 29,
+    "schedule_gap": 8,
+    "room_overutilization": 1
+  },
+  "violations": [
+    {
+      "constraint": "weekly_limit",
+      "lecturer_id": "L005",
+      "hours": 40,
+      "max_hours": 22,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L001",
+      "day": "MON",
+      "morning_sessions": 2,
+      "afternoon_sessions": 0,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L001",
+      "day": "FRI",
+      "morning_sessions": 2,
+      "afternoon_sessions": 0,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L002",
+      "day": "MON",
+      "morning_sessions": 2,
+      "afternoon_sessions": 0,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L002",
+      "day": "FRI",
+      "morning_sessions": 2,
+      "afternoon_sessions": 0,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L005",
+      "day": "TUE",
+      "sessions": 4,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L005",
+      "day": "TUE",
+      "morning_sessions": 2,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L005",
+      "day": "WED",
+      "sessions": 4,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L005",
+      "day": "WED",
+      "morning_sessions": 2,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L005",
+      "day": "MON",
+      "sessions": 4,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L005",
+      "day": "MON",
+      "morning_sessions": 2,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L005",
+      "day": "THU",
+      "sessions": 4,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L005",
+      "day": "THU",
+      "morning_sessions": 2,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L005",
+      "day": "FRI",
+      "sessions": 4,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L005",
+      "day": "FRI",
+      "morning_sessions": 2,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L007",
+      "day": "TUE",
+      "morning_sessions": 0,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L007",
+      "day": "THU",
+      "morning_sessions": 0,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L008",
+      "day": "TUE",
+      "morning_sessions": 2,
+      "afternoon_sessions": 0,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L008",
+      "day": "WED",
+      "morning_sessions": 0,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L010",
+      "day": "FRI",
+      "morning_sessions": 0,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L010",
+      "day": "THU",
+      "morning_sessions": 2,
+      "afternoon_sessions": 0,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L013",
+      "day": "THU",
+      "morning_sessions": 2,
+      "afternoon_sessions": 0,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L013",
+      "day": "FRI",
+      "morning_sessions": 0,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L012",
+      "day": "TUE",
+      "sessions": 3,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L012",
+      "day": "TUE",
+      "morning_sessions": 2,
+      "afternoon_sessions": 1,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L012",
+      "day": "WED",
+      "sessions": 3,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L012",
+      "day": "WED",
+      "morning_sessions": 1,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L004",
+      "day": "WED",
+      "morning_sessions": 2,
+      "afternoon_sessions": 0,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L004",
+      "day": "FRI",
+      "morning_sessions": 0,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "daily_limit",
+      "lecturer_id": "L015",
+      "day": "MON",
+      "morning_sessions": 0,
+      "afternoon_sessions": 2,
+      "severity": "WARNING"
+    },
+    {
+      "constraint": "schedule_gap",
+      "student_group": "BCS_BCS-126_S1_None",
+      "day": "FRI",
+      "gap_hours": 5,
+      "first_slot": "11:00-13:00",
+      "second_slot": "16:00-18:00",
+      "severity": "WARNING",
+      "message": "Large gap (5 hours) in schedule"
+    },
+    {
+      "constraint": "schedule_gap",
+      "student_group": "BSCAIT_BSCAIT-126_S2_None",
+      "day": "WED",
+      "gap_hours": 7,
+      "first_slot": "09:00-11:00",
+      "second_slot": "16:00-18:00",
+      "severity": "WARNING",
+      "message": "Large gap (7 hours) in schedule"
+    },
+    {
+      "constraint": "schedule_gap",
+      "student_group": "BCS_BCS-126_S2_None",
+      "day": "WED",
+      "gap_hours": 7,
+      "first_slot": "09:00-11:00",
+      "second_slot": "16:00-18:00",
+      "severity": "WARNING",
+      "message": "Large gap (7 hours) in schedule"
+    },
+    {
+      "constraint": "schedule_gap",
+      "student_group": "BSCAIT_BSCAIT-126_S4_None",
+      "day": "TUE",
+      "gap_hours": 5,
+      "first_slot": "09:00-11:00",
+      "second_slot": "14:00-16:00",
+      "severity": "WARNING",
+      "message": "Large gap (5 hours) in schedule"
+    },
+    {
+      "constraint": "schedule_gap",
+      "student_group": "BSCAIT_BSCAIT-126_S4_None",
+      "day": "WED",
+      "gap_hours": 5,
+      "first_slot": "09:00-11:00",
+      "second_slot": "14:00-16:00",
+      "severity": "WARNING",
+      "message": "Large gap (5 hours) in schedule"
+    },
+    {
+      "constraint": "schedule_gap",
+      "student_group": "BSCAIT_BSCAIT-126_S5_None",
+      "day": "THU",
+      "gap_hours": 5,
+      "first_slot": "09:00-11:00",
+      "second_slot": "14:00-16:00",
+      "severity": "WARNING",
+      "message": "Large gap (5 hours) in schedule"
+    },
+    {
+      "constraint": "schedule_gap",
+      "student_group": "BSCAIT_BSCAIT-126_S5_None",
+      "day": "FRI",
+      "gap_hours": 5,
+      "first_slot": "09:00-11:00",
+      "second_slot": "14:00-16:00",
+      "severity": "WARNING",
+      "message": "Large gap (5 hours) in schedule"
+    },
+    {
+      "constraint": "schedule_gap",
+      "student_group": "BCS_BCS-126_S5_None",
+      "day": "THU",
+      "gap_hours": 5,
+      "first_slot": "09:00-11:00",
+      "second_slot": "14:00-16:00",
+      "severity": "WARNING",
+      "message": "Large gap (5 hours) in schedule"
+    },
+    {
+      "constraint": "room_overutilization",
+      "room": "203",
+      "avg_utilization": 90.6,
+      "sessions": 6,
+      "capacity": 32,
+      "severity": "WARNING",
+      "message": "Room 203 is consistently overutilized (90.6% average)"
+    }
+  ]
+}

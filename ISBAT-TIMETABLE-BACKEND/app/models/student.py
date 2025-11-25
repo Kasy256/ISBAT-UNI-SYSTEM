@@ -14,7 +14,6 @@ class StudentGroup:
     term: str
     size: int
     course_units: List[str] = field(default_factory=list)
-    academic_year: Optional[str] = None
     is_active: bool = True
     
     def to_dict(self):
@@ -27,7 +26,6 @@ class StudentGroup:
             'term': self.term,
             'size': self.size,
             'course_units': self.course_units,
-            'academic_year': self.academic_year,
             'is_active': self.is_active
         }
     
@@ -42,7 +40,6 @@ class StudentGroup:
             term=data['term'],
             size=data['size'],
             course_units=data.get('course_units', []),
-            academic_year=data.get('academic_year'),
             is_active=data.get('is_active', True)
         )
     

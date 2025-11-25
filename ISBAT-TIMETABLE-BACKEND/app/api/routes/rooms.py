@@ -17,7 +17,6 @@ def get_rooms():
     Query parameters:
     - room_type: Filter by room type (Theory, Lab)
     - min_capacity: Minimum capacity
-    - building: Filter by building
     - available: Filter by availability (true/false)
     """
     try:
@@ -33,10 +32,6 @@ def get_rooms():
         min_capacity = request.args.get('min_capacity', type=int)
         if min_capacity:
             query['capacity'] = {'$gte': min_capacity}
-        
-        building = request.args.get('building')
-        if building:
-            query['building'] = building
         
         available = request.args.get('available')
         if available is not None:
@@ -90,10 +85,7 @@ def create_room():
         "room_number": "L201",
         "capacity": 60,
         "room_type": "Theory",
-        "building": "Main Building",
-        "floor": 2,
-        "facilities": ["Projector", "Whiteboard"],
-        "specializations": []
+        "is_available": true
     }
     """
     try:
@@ -264,9 +256,7 @@ def search_rooms():
     {
         "room_type": "Lab",
         "min_capacity": 30,
-        "max_capacity": 60,
-        "facilities": ["Projector"],
-        "building": "Main Building"
+        "max_capacity": 60
     }
     """
     try:
@@ -282,14 +272,8 @@ def search_rooms():
             query['capacity'] = {}
             if 'min_capacity' in criteria:
                 query['capacity']['$gte'] = criteria['min_capacity']
-            if 'max_capacity' in criteria:
-                query['capacity']['$lte'] = criteria['max_capacity']
-        
-        if 'facilities' in criteria and criteria['facilities']:
-            query['facilities'] = {'$all': criteria['facilities']}
-        
-        if 'building' in criteria:
-            query['building'] = criteria['building']
+        if 'max_capacity' in criteria:
+            query['capacity']['$lte'] = criteria['max_capacity']
         
         if 'is_available' in criteria:
             query['is_available'] = criteria['is_available']

@@ -97,8 +97,7 @@ def create_student_group():
         "semester": "S1",
         "term": "Term1",
         "size": 45,
-        "course_units": ["CS101", "CS102"],
-        "academic_year": "2024/2025"
+        "course_units": ["CS101", "CS102"]
     }
     """
     try:

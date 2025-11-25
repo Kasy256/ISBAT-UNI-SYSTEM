@@ -257,7 +257,6 @@ def _create_merged_course(canonical_id, canonical_courses, data, courses_dict, g
         difficulty=prototype.difficulty,
         is_foundational=prototype.is_foundational,
         prerequisites=prototype.prerequisites,
-        corequisites=prototype.corequisites,
         preferred_term=prototype.preferred_term,
         semester=prototype.semester,
         program=prototype.program,
@@ -928,7 +927,7 @@ def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number)
         "Session_ID", "Day", "Time_Slot", "Start_Time", "End_Time",
         "Course_Code", "Course_Name", "Course_Type", "Credits",
         "Lecturer_ID", "Lecturer_Name", "Lecturer_Role",
-        "Room_Number", "Room_Type", "Room_Capacity", "Room_Building", "Room_Campus",
+        "Room_Number", "Room_Type", "Room_Capacity", "Room_Campus",
         "Student_Group", "Semester", "Term", "Group_Size"
     ]
     
@@ -966,7 +965,6 @@ def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number)
                     "Room_Number": room.room_number,
                     "Room_Type": room.room_type,
                     "Room_Capacity": room.capacity,
-                    "Room_Building": room.building,
                     "Room_Campus": getattr(room, 'campus', 'N/A'),
                     "Student_Group": assignment['student_group_name'],
                     "Semester": assignment['semester'],
@@ -1007,7 +1005,6 @@ def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number)
                         "Room_Number": room.room_number if room else "N/A",
                         "Room_Type": room.room_type if room else "N/A",
                         "Room_Capacity": room.capacity if room else 0,
-                        "Room_Building": room.building if room else "N/A",
                         "Room_Campus": getattr(room, 'campus', 'N/A') if room else "N/A",
                         "Student_Group": assignment['student_group_name'],
                         "Semester": assignment['semester'],

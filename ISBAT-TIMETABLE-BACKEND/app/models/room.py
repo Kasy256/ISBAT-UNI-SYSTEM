@@ -18,10 +18,6 @@ class Room:
     room_number: str
     capacity: int
     room_type: str
-    building: Optional[str] = None
-    floor: Optional[int] = None
-    facilities: List[str] = field(default_factory=list)
-    specializations: List[str] = field(default_factory=list)
     is_available: bool = True
     
     def to_dict(self):
@@ -31,10 +27,6 @@ class Room:
             'room_number': self.room_number,
             'capacity': self.capacity,
             'room_type': self.room_type,
-            'building': self.building,
-            'floor': self.floor,
-            'facilities': self.facilities,
-            'specializations': self.specializations,
             'is_available': self.is_available
         }
     
@@ -46,10 +38,6 @@ class Room:
             room_number=data['room_number'],
             capacity=data['capacity'],
             room_type=data['room_type'],
-            building=data.get('building'),
-            floor=data.get('floor'),
-            facilities=data.get('facilities', []),
-            specializations=data.get('specializations', []),
             is_available=data.get('is_available', True)
         )
     
@@ -68,11 +56,3 @@ class Room:
     def is_theory(self) -> bool:
         """Check if room is a theory room"""
         return self.room_type == RoomType.THEORY.value
-    
-    def has_facility(self, facility: str) -> bool:
-        """Check if room has specific facility"""
-        return facility in self.facilities
-    
-    def has_specialization(self, spec: str) -> bool:
-        """Check if room has specific specialization"""
-        return spec in self.specializations

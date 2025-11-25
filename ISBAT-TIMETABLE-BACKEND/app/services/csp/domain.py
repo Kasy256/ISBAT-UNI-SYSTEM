@@ -204,22 +204,24 @@ class DomainManager:
     def _is_room_suitable(self, room, course_unit, student_group=None) -> bool:
         """Check if room is suitable for course unit
         
-        IMPORTANT: We only check room TYPE here, not capacity.
-        Capacity is checked during constraint validation, which allows the CSP
-        solver to try different time slots when rooms aren't available.
-        
-        This enables the system to:
-        1. Try all rooms of the correct type
-        2. Check capacity during assignment (when we know the time slot)
-        3. Backtrack and try different time slots if capacity fails
+        Checks both room TYPE and capacity to avoid including rooms that can never work.
+        This prevents the solver from wasting time trying rooms that are too small.
         """
         # Get required room type directly from preferred_room_type
         required_room_type = getattr(course_unit, 'preferred_room_type', 'Theory')
         
         # STRICT: Room type must match course type
         # Lab courses MUST use Lab rooms, Theory courses MUST use Theory rooms
-        # Capacity will be checked by RoomCapacityConstraint during assignment
-        return room.room_type == required_room_type
+        if room.room_type != required_room_type:
+            return False
+        
+        # CRITICAL: Also check capacity at domain level to prevent trying rooms that are too small
+        # This is more efficient than failing during assignment
+        if student_group and hasattr(student_group, 'size'):
+            if room.capacity < student_group.size:
+                return False  # Room is too small for this group
+        
+        return True
     
     def filter_domain(self, variable: SchedulingVariable, 
                      constraint_type: str, 

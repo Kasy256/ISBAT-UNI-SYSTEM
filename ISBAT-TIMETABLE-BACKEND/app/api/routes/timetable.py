@@ -1,16 +1,13 @@
 ﻿from flask import Blueprint, request, jsonify
 from app import get_db
-from app.models.lecturer import Lecturer
-from app.models.room import Room
-from app.models.course import CourseUnit
-from app.models.student import StudentGroup
-from app.services.preprocessing.term_splitter import TermSplitter
-from app.services.csp.csp_engine import CSPEngine
-from app.services.gga.gga_engine import GGAEngine
-from app.services.gga.chromosome import Chromosome
 from app.middleware.auth import require_auth, require_role
 from bson import ObjectId
 import traceback
+import subprocess
+import os
+import json
+from pathlib import Path
+from datetime import datetime
 
 bp = Blueprint('timetable', __name__, url_prefix='/api/timetable')
 
@@ -19,178 +16,296 @@ bp = Blueprint('timetable', __name__, url_prefix='/api/timetable')
 @require_role('scheduler')
 def generate_timetable():
     """
-    Generate timetable for given program and semesters
+    Generate timetable for a specific term (Term 1 or Term 2)
+    Calls generate_term_timetable.py --term X and then verifies constraints
     
     Request body:
     {
-        "program": "BSCAIT",
-        "batch": "BSCAIT-126",
-        "semesters": ["S1", "S2"],
-        "optimize": true
+        "term": 1  or 2
     }
     """
     try:
         data = request.get_json()
-        program = data.get('program')
-        batch = data.get('batch')
-        semesters = data.get('semesters', [])
-        optimize = data.get('optimize', True)
+        term = data.get('term')
         
-        if not program or not batch or not semesters:
-            return jsonify({'error': 'Missing required fields'}), 400
+        if term not in [1, 2]:
+            return jsonify({'error': 'Term must be 1 or 2'}), 400
         
-        db = get_db()
+        # Get the backend directory path
+        # __file__ is at: app/api/routes/timetable.py
+        # So we need to go up 3 levels: routes -> api -> app -> backend root
+        current_file = Path(__file__).resolve()
+        backend_dir = current_file.parent.parent.parent.parent
         
-        # Fetch data from database
-        lecturers_data = list(db.lecturers.find())
-        rooms_data = list(db.rooms.find())
-        course_units_data = list(db.course_units.find())
-        student_groups_data = list(db.student_groups.find({
-            'batch': batch,
-            'program': program,
-            'semester': {'$in': semesters}
-        }))
+        # Debug: Print path information
+        print(f"Current file: {current_file}")
+        print(f"Calculated backend_dir: {backend_dir}")
+        print(f"Backend dir exists: {backend_dir.exists()}")
         
-        if not student_groups_data:
-            return jsonify({'error': 'No student groups found for given criteria'}), 404
+        # Alternative: Try to find the script in common locations
+        if not (backend_dir / 'generate_term_timetable.py').exists():
+            # Try current directory
+            backend_dir = Path.cwd()
+            if not (backend_dir / 'generate_term_timetable.py').exists():
+                # Try one level up
+                backend_dir = Path.cwd().parent
+                if not (backend_dir / 'generate_term_timetable.py').exists():
+                    return jsonify({
+                        'error': 'Timetable generation script not found',
+                        'searched_paths': [
+                            str(current_file.parent.parent.parent.parent),
+                            str(Path.cwd()),
+                            str(Path.cwd().parent)
+                        ]
+                    }), 500
         
-        # Convert to models
-        lecturers = [Lecturer.from_dict(l) for l in lecturers_data]
-        rooms = [Room.from_dict(r) for r in rooms_data]
-        course_units = [CourseUnit.from_dict(cu) for cu in course_units_data]
-        student_groups = [StudentGroup.from_dict(sg) for sg in student_groups_data]
+        # Step 1: Generate timetable by calling Python script
+        print(f"\n{'='*70}")
+        print(f"Generating Term {term} Timetable")
+        print(f"Backend directory: {backend_dir}")
+        print(f"{'='*70}\n")
         
-        print(f"Loaded: {len(lecturers)} lecturers, {len(rooms)} rooms, "
-              f"{len(course_units)} course units, {len(student_groups)} student groups")
-        
-        # Step 1: Term Splitting
-        print("\n=== STEP 1: TERM SPLITTING ===")
-        term_splitter = TermSplitter()
-        term_splits = {}
-        
-        for semester in semesters:
-            # Get course units for this semester
-            semester_units = [
-                cu for cu in course_units 
-                if any(sg.semester == semester and cu.id in sg.course_units for sg in student_groups)
-            ]
-            
-            if semester_units:
-                try:
-                    term1, term2 = term_splitter.split_semester(semester, semester_units)
-                    term_splits[semester] = {'term1': term1, 'term2': term2}
-                    print(f"{semester}: T1={len(term1.assigned_units)} units, T2={len(term2.assigned_units)} units")
-                except Exception as e:
-                    print(f"Term split error for {semester}: {str(e)}")
-                    continue
-        
-        # Step 2: CSP Scheduling
-        print("\n=== STEP 2: CSP SCHEDULING ===")
-        csp_engine = CSPEngine()
-        csp_engine.initialize(lecturers, rooms, course_units, student_groups)
-        
-        csp_solution = csp_engine.solve()
-        
-        if not csp_solution:
+        generate_script = backend_dir / 'generate_term_timetable.py'
+        if not generate_script.exists():
             return jsonify({
-                'error': 'Failed to generate valid timetable',
-                'message': 'CSP could not find a solution. Try relaxing constraints or adding resources.'
+                'error': f'Timetable generation script not found at {generate_script}',
+                'backend_dir': str(backend_dir)
             }), 500
         
-        csp_result = csp_engine.get_solution()
-        print(f"CSP generated {csp_result['statistics']['total_sessions']} sessions")
+        # Determine Python executable (handle Windows)
+        import sys
+        python_exe = sys.executable  # Use the same Python that's running Flask
         
-        # Step 3: GGA Optimization (if requested)
-        final_result = csp_result
-        
-        if optimize:
-            print("\n=== STEP 3: GGA OPTIMIZATION ===")
-            
-            # Create chromosome from CSP solution
-            initial_chromosome = Chromosome.from_csp_solution(csp_solution)
-            
-            # Initialize GGA
-            gga_engine = GGAEngine(
-                {cu.id: cu for cu in course_units},
-                {sg.id: sg for sg in student_groups},
-                {l.id: l for l in lecturers},
-                {r.id: r for r in rooms}
+        # Run generation script
+        try:
+            result = subprocess.run(
+                [python_exe, str(generate_script), '--term', str(term)],
+                cwd=str(backend_dir),
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=600  # 10 minute timeout
             )
-            
-            # Optimize
-            optimized_chromosome = gga_engine.optimize(initial_chromosome)
-            
-            # Convert back to timetable format
-            optimized_timetable = {}
-            for gene in optimized_chromosome.genes:
-                sg_id = gene.student_group_id
-                if sg_id not in optimized_timetable:
-                    optimized_timetable[sg_id] = []
+        except subprocess.TimeoutExpired:
+            return jsonify({
+                'error': 'Timetable generation timed out (exceeded 10 minutes)'
+            }), 500
+        except Exception as e:
+            return jsonify({
+                'error': f'Failed to run generation script: {str(e)}',
+                'python_exe': python_exe,
+                'script_path': str(generate_script)
+            }), 500
+        
+        if result.returncode != 0:
+            error_msg = result.stderr or result.stdout or 'No error output'
+            print(f"Generation script error:\n{error_msg}")
+            return jsonify({
+                'error': 'Timetable generation failed',
+                'details': error_msg[-2000:] if len(error_msg) > 2000 else error_msg,
+                'returncode': result.returncode
+            }), 500
+        
+        # Step 2: Verify constraints by calling verification script
+        csv_filename = f'TIMETABLE_TERM{term}_COMPLETE.csv'
+        csv_path = backend_dir / csv_filename
+        
+        if not csv_path.exists():
+            return jsonify({
+                'error': f'Generated CSV file not found: {csv_filename}',
+                'searched_path': str(csv_path),
+                'generation_output': result.stdout[-1000:] if result.stdout else 'No output',
+                'generation_stderr': result.stderr[-1000:] if result.stderr else 'No error output'
+            }), 500
+        
+        print(f"\n{'='*70}")
+        print(f"Verifying Timetable Constraints")
+        print(f"CSV file: {csv_path}")
+        print(f"{'='*70}\n")
+        
+        verify_script = backend_dir / 'verify_timetable_constraints.py'
+        violations_file = backend_dir / f'violations_term{term}.json'
+        
+        if not verify_script.exists():
+            print(f"Warning: Verification script not found at {verify_script}, skipping verification")
+            violations_data = None
+        else:
+            # Run verification script
+            try:
+                verify_result = subprocess.run(
+                    [python_exe, str(verify_script), str(csv_path), '--export', str(violations_file)],
+                    cwd=str(backend_dir),
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    timeout=300  # 5 minute timeout
+                )
+            except subprocess.TimeoutExpired:
+                print("Warning: Verification script timed out")
+                violations_data = None
+            except Exception as e:
+                print(f"Warning: Verification script failed: {e}")
+                violations_data = None
+            else:
+                # Load violations if file exists (verification may have failed but still created file)
+                if violations_file.exists():
+                    try:
+                        with open(violations_file, 'r', encoding='utf-8') as f:
+                            violations_data = json.load(f)
+                    except Exception as e:
+                        print(f"Warning: Could not load violations file: {e}")
+                        violations_data = None
+                else:
+                    violations_data = None
+        
+        # Step 3: Parse CSV and save to database
+        import csv
+        db = get_db()
+        
+        # Parse the CSV file
+        timetable_data = {}
+        sessions_list = []
+        
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                student_group = row.get('Student_Group', '')
+                if not student_group:
+                    continue
                 
-                course_unit = next((cu for cu in course_units if cu.id == gene.course_unit_id), None)
-                lecturer = next((l for l in lecturers if l.id == gene.lecturer_id), None)
-                room = next((r for r in rooms if r.id == gene.room_id), None)
+                # Organize by student group
+                if student_group not in timetable_data:
+                    timetable_data[student_group] = []
+                
+                # Map time slot to period identifier
+                start_time = row.get('Start_Time', '')
+                end_time = row.get('End_Time', '')
+                period = ''
+                if start_time == '09:00' and end_time == '11:00':
+                    period = 'SLOT_1'
+                elif start_time == '11:00' and end_time == '13:00':
+                    period = 'SLOT_2'
+                elif start_time == '14:00' and end_time == '16:00':
+                    period = 'SLOT_3'
+                elif start_time == '16:00' and end_time == '18:00':
+                    period = 'SLOT_4'
+                
+                # Parse student group to extract program and semester
+                student_group_name = row.get('Student_Group', '')
+                program = ''
+                semester = row.get('Semester', '')
+                
+                # Extract program from student group name
+                if student_group_name:
+                    # Format: BSCAIT_BSCAIT-126_S1_None or BCS_BCS-126_S1_None
+                    parts = student_group_name.split('_')
+                    if len(parts) > 0:
+                        program_raw = parts[0]  # BSCAIT or BCS
+                        # Map BSCAIT to BIT, keep BCS as is
+                        if program_raw == 'BSCAIT':
+                            program = 'BIT'
+                        elif program_raw == 'BCS':
+                            program = 'BCS'
+                        else:
+                            program = program_raw
+                
+                # Ensure semester is in correct format (S1, S2, etc.)
+                if semester:
+                    # Make sure it starts with S and is uppercase
+                    if not semester.upper().startswith('S'):
+                        semester = f'S{semester}'
+                    else:
+                        semester = semester.upper()
+                elif student_group_name:
+                    # Fallback: extract from group name if not in CSV
+                    parts = student_group_name.split('_')
+                    for part in parts:
+                        if part.startswith('S') and len(part) == 2:
+                            semester = part.upper()
+                            break
                 
                 session = {
-                    'session_id': gene.session_id,
+                    'session_id': row.get('Session_ID', ''),
                     'course_unit': {
-                        'id': course_unit.id,
-                        'code': course_unit.code,
-                        'name': course_unit.name,
-                        'preferred_room_type': course_unit.preferred_room_type
-                    } if course_unit else {},
+                        'id': row.get('Course_Code', ''),
+                        'code': row.get('Course_Code', ''),
+                        'name': row.get('Course_Name', ''),
+                        'preferred_room_type': row.get('Course_Type', 'Theory'),
+                        'credits': int(row.get('Credits', 0)) if row.get('Credits') else 0
+                    },
                     'lecturer': {
-                        'id': lecturer.id,
-                        'name': lecturer.name
-                    } if lecturer else {},
+                        'id': row.get('Lecturer_ID', ''),
+                        'name': row.get('Lecturer_Name', ''),
+                        'role': row.get('Lecturer_Role', '')
+                    },
                     'room': {
-                        'id': room.id,
-                        'number': room.room_number,
-                        'capacity': room.capacity,
-                        'type': room.room_type
-                    } if room else {},
-                    'time_slot': gene.time_slot,
-                    'term': gene.term,
-                    'session_number': gene.session_number
+                        'id': row.get('Room_Number', ''),
+                        'number': row.get('Room_Number', ''),
+                        'capacity': int(row.get('Room_Capacity', 0)) if row.get('Room_Capacity') else 0,
+                        'type': row.get('Room_Type', 'Theory'),
+                        'campus': row.get('Room_Campus', 'N/A')
+                    },
+                    'time_slot': {
+                        'day': row.get('Day', ''),
+                        'period': period,
+                        'start': start_time,
+                        'end': end_time,
+                        'time_slot': row.get('Time_Slot', f'{start_time}-{end_time}')
+                    },
+                    'term': row.get('Term', f'Term{term}'),
+                    'semester': semester,
+                    'program': program,
+                    'student_group_name': student_group_name,
+                    'group_size': int(row.get('Group_Size', 0)) if row.get('Group_Size') else 0,
+                    'session_number': 1
                 }
-                optimized_timetable[sg_id].append(session)
-            
-            gga_report = gga_engine.get_optimization_report()
-            
-            final_result = {
-                'success': True,
-                'timetable': optimized_timetable,
-                'statistics': {
-                    'total_sessions': len(optimized_chromosome.genes),
-                    'csp_time': csp_result['statistics']['time_elapsed'],
-                    'gga_time': gga_report['time_elapsed'],
-                    'total_time': csp_result['statistics']['time_elapsed'] + gga_report['time_elapsed'],
-                    'fitness': {
-                        'overall': optimized_chromosome.fitness.overall_fitness if optimized_chromosome.fitness else 0,
-                        'breakdown': gga_report['fitness_breakdown']
-                    }
-                },
-                'optimization': gga_report
-            }
+                
+                timetable_data[student_group].append(session)
+                sessions_list.append(session)
         
         # Save to database
         timetable_doc = {
-            'program': program,
-            'batch': batch,
-            'semesters': semesters,
-            'timetable': final_result['timetable'],
-            'statistics': final_result['statistics'],
-            'optimized': optimize,
-            'created_at': None
+            'term': f'Term{term}',
+            'timetable': timetable_data,
+            'statistics': {
+                'total_sessions': len(sessions_list),
+                'student_groups': len(timetable_data),
+                'generated_at': datetime.utcnow().isoformat()
+            },
+            'optimized': True,  # GGA optimization is part of the script
+            'created_at': datetime.utcnow()
         }
         
-        from datetime import datetime
-        timetable_doc['created_at'] = datetime.utcnow()
+        # Save to database (rename to avoid conflict with subprocess result)
+        db_result = db.timetables.insert_one(timetable_doc)
+        timetable_doc['_id'] = str(db_result.inserted_id)
         
-        result = db.timetables.insert_one(timetable_doc)
-        final_result['timetable_id'] = str(result.inserted_id)
+        # Add verification results to timetable document
+        if violations_data:
+            db.timetables.update_one(
+                {'_id': ObjectId(timetable_doc['_id'])},
+                {'$set': {
+                    'verification': violations_data,
+                    'verified_at': datetime.utcnow()
+                }}
+            )
+            timetable_doc['verification'] = violations_data
         
-        return jsonify(final_result), 200
+        # Get verification output if available
+        verification_output = ''
+        if 'verify_result' in locals() and hasattr(verify_result, 'stdout'):
+            verification_output = verify_result.stdout[-1000:] if verify_result.stdout else ''
+        
+        return jsonify({
+            'success': True,
+            'timetable_id': timetable_doc['_id'],
+            'timetable': timetable_doc,
+            'verification': violations_data,
+            'generation_output': result.stdout[-1000:] if result.stdout else '',
+            'verification_output': verification_output
+        }), 200
         
     except Exception as e:
         print(f"Error generating timetable: {str(e)}")

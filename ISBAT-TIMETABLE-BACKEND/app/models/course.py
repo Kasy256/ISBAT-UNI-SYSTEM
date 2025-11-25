@@ -31,7 +31,6 @@ class CourseUnit:
     difficulty: str = DifficultyLevel.MEDIUM.value
     is_foundational: bool = False
     prerequisites: List[str] = field(default_factory=list)
-    corequisites: List[str] = field(default_factory=list)
     preferred_term: Optional[str] = None
     semester: Optional[str] = None
     program: Optional[str] = None
@@ -49,7 +48,6 @@ class CourseUnit:
             'difficulty': self.difficulty,
             'is_foundational': self.is_foundational,
             'prerequisites': self.prerequisites,
-            'corequisites': self.corequisites,
             'preferred_term': self.preferred_term,
             'semester': self.semester,
             'program': self.program,
@@ -71,12 +69,11 @@ class CourseUnit:
             code=data['code'],
             name=data['name'],
             weekly_hours=data['weekly_hours'],
-            credits=data['credits'],
+            credits=data.get('credits', 3),  # Default to 3 if not provided
             preferred_room_type=preferred_room_type,
             difficulty=data.get('difficulty', DifficultyLevel.MEDIUM.value),
             is_foundational=data.get('is_foundational', False),
             prerequisites=data.get('prerequisites', []),
-            corequisites=data.get('corequisites', []),
             preferred_term=data.get('preferred_term'),
             semester=data.get('semester'),
             program=data.get('program'),
@@ -98,10 +95,6 @@ class CourseUnit:
     def has_prerequisite(self, course_id: str) -> bool:
         """Check if course has a specific prerequisite"""
         return course_id in self.prerequisites
-    
-    def has_corequisite(self, course_id: str) -> bool:
-        """Check if course has a specific corequisite"""
-        return course_id in self.corequisites
     
     @property
     def canonical_id(self) -> Optional[str]:
