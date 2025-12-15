@@ -5,7 +5,7 @@ import StatCard from "@/components/StatCard";
 import { Users, BookOpen, Home, Calendar, Plus, RefreshCw, Loader2, GraduationCap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
-import { lecturersAPI, coursesAPI, roomsAPI, timetableAPI, studentsAPI } from "@/lib/api";
+import { lecturersAPI, subjectsAPI, roomsAPI, timetableAPI, programsAPI } from "@/lib/api";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -20,10 +20,10 @@ export default function Dashboard() {
   });
 
   const { data: coursesData, isLoading: coursesLoading } = useQuery({
-    queryKey: ['courses'],
+    queryKey: ['subjects'],
     queryFn: async () => {
-      const response = await coursesAPI.getAll();
-      return response.courses || [];
+      const response = await subjectsAPI.getAll();
+      return response.subjects || [];
     },
   });
 
@@ -43,19 +43,19 @@ export default function Dashboard() {
     },
   });
 
-  const { data: studentGroupsData, isLoading: studentGroupsLoading } = useQuery({
-    queryKey: ['student-groups'],
+  const { data: programsData, isLoading: programsLoading } = useQuery({
+    queryKey: ['programs'],
     queryFn: async () => {
-      const response = await studentsAPI.getAll();
-      return response.student_groups || [];
+      const response = await programsAPI.getAll();
+      return response.programs || [];
     },
   });
 
   const lecturers = lecturersData || [];
-  const courses = coursesData || [];
+  const subjects = coursesData || [];
   const rooms = roomsData || [];
   const timetables = timetablesData || [];
-  const studentGroups = studentGroupsData || [];
+  const programs = programsData || [];
 
   const latestTimetable = timetables.length > 0 ? timetables[0] : null;
   const hasGeneratedTimetable = timetables.length > 0;
@@ -69,11 +69,11 @@ export default function Dashboard() {
       trend: { value: `${lecturers.length} total`, isPositive: true },
     },
     {
-      title: "Total Courses",
-      value: courses.length,
+      title: "Total Subjects",
+      value: subjects.length,
       icon: BookOpen,
-      description: "Course units available",
-      trend: { value: `${courses.length} units`, isPositive: true },
+      description: "Subject units available",
+      trend: { value: `${subjects.length} units`, isPositive: true },
     },
     {
       title: "Total Rooms",
@@ -83,11 +83,11 @@ export default function Dashboard() {
       trend: { value: `${rooms.filter(r => r.is_available).length} available`, isPositive: true },
     },
     {
-      title: "Student Groups",
-      value: studentGroups.length,
+      title: "Programs",
+      value: programs.length,
       icon: GraduationCap,
-      description: "Student cohorts defined",
-      trend: { value: `${studentGroups.filter(sg => sg.is_active).length} active`, isPositive: studentGroups.length > 0 },
+      description: "Programs defined",
+      trend: { value: `${programs.filter(program => program.is_active).length} active`, isPositive: programs.length > 0 },
     },
     {
       title: "Timetables",
@@ -100,13 +100,13 @@ export default function Dashboard() {
 
   const quickActions = [
     { label: "Add Lecturer", icon: Users, variant: "default", to: "/lecturers" },
-    { label: "Add Course", icon: BookOpen, variant: "default", to: "/courses" },
+    { label: "Add Subject", icon: BookOpen, variant: "default", to: "/subjects" },
     { label: "Add Room", icon: Home, variant: "default", to: "/rooms" },
-    { label: "Student Groups", icon: Users, variant: "default", to: "/student-groups" },
+    { label: "Programs", icon: GraduationCap, variant: "default", to: "/programs" },
     { label: "Generate Timetable", icon: RefreshCw, variant: "default", to: "/timetables" },
   ];
 
-  const isLoading = lecturersLoading || coursesLoading || roomsLoading || timetablesLoading || studentGroupsLoading;
+  const isLoading = lecturersLoading || coursesLoading || roomsLoading || timetablesLoading || programsLoading;
 
   return (
     <div className="space-y-8">
@@ -199,20 +199,20 @@ export default function Dashboard() {
               <div className="flex-1">
                 <p className="text-sm font-medium">Data Readiness</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {lecturers.length > 0 && courses.length > 0 && rooms.length > 0
+                  {lecturers.length > 0 && subjects.length > 0 && rooms.length > 0
                     ? "All systems ready for timetable generation"
-                    : "Please add lecturers, courses, and rooms"}
+                    : "Please add lecturers, subjects, and rooms"}
                 </p>
               </div>
               <Badge
                 variant={
-                  lecturers.length > 0 && courses.length > 0 && rooms.length > 0
+                  lecturers.length > 0 && subjects.length > 0 && rooms.length > 0
                     ? "default"
                     : "secondary"
                 }
                 className="text-xs"
               >
-                {lecturers.length > 0 && courses.length > 0 && rooms.length > 0
+                {lecturers.length > 0 && subjects.length > 0 && rooms.length > 0
                   ? "Ready"
                   : "Setup Required"}
               </Badge>

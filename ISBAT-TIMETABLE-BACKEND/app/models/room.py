@@ -13,20 +13,20 @@ class RoomType(Enum):
 
 @dataclass
 class Room:
-    """Room model"""
-    id: str
-    room_number: str
+    """Room model - room_number is the primary identifier"""
+    room_number: str  # Primary identifier (e.g., "104", "L201", "B-101")
     capacity: int
     room_type: str
+    specializations: List[str] = field(default_factory=list)  # List of specializations (e.g., ["Programming", "ICT", "Multimedia"])
     is_available: bool = True
     
     def to_dict(self):
         """Convert to dictionary for MongoDB"""
         return {
-            'id': self.id,
             'room_number': self.room_number,
             'capacity': self.capacity,
             'room_type': self.room_type,
+            'specializations': self.specializations or [],
             'is_available': self.is_available
         }
     
@@ -34,12 +34,17 @@ class Room:
     def from_dict(data: dict) -> 'Room':
         """Create Room from dictionary"""
         return Room(
-            id=data['id'],
             room_number=data['room_number'],
             capacity=data['capacity'],
             room_type=data['room_type'],
+            specializations=data.get('specializations', []) or [],
             is_available=data.get('is_available', True)
         )
+    
+    @property
+    def id(self) -> str:
+        """Alias for room_number for backward compatibility"""
+        return self.room_number
     
     def can_accommodate(self, student_count: int) -> bool:
         """Check if room can accommodate given number of students"""

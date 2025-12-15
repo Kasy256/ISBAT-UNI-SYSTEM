@@ -28,9 +28,10 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LecturerForm } from "@/components/lecturers/LecturerForm";
+import ImportDialog from "@/components/ImportDialog";
 import { toast } from "sonner";
 import { Button as UIButton } from "@/components/ui/button";
-import { lecturersAPI, coursesAPI } from "@/lib/api";
+import { lecturersAPI, subjectsAPI, canonicalGroupsAPI, importAPI } from "@/lib/api";
 
 export default function Lecturers() {
   const queryClient = useQueryClient();
@@ -38,6 +39,7 @@ export default function Lecturers() {
   const [facultyFilter, setFacultyFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingLecturer, setEditingLecturer] = useState(undefined);
   const [sortBy, setSortBy] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
@@ -51,17 +53,27 @@ export default function Lecturers() {
     },
   });
 
-  // Fetch courses for specializations dropdown
+  // Fetch subjects for specializations dropdown
   const { data: coursesData } = useQuery({
-    queryKey: ['courses'],
+    queryKey: ['subjects'],
     queryFn: async () => {
-      const response = await coursesAPI.getAll();
-      return response.courses || [];
+      const response = await subjectsAPI.getAll();
+      return response.subjects || [];
+    },
+  });
+
+  // Fetch canonical groups for course group names
+  const { data: canonicalGroupsData } = useQuery({
+    queryKey: ['canonical-groups'],
+    queryFn: async () => {
+      const response = await canonicalGroupsAPI.getAll();
+      return response.canonical_groups || [];
     },
   });
 
   const lecturers = data || [];
-  const courses = coursesData || [];
+  const subjects = coursesData || [];
+  const canonicalGroups = canonicalGroupsData || [];
 
   // Get unique faculties and roles for filters
   const faculties = useMemo(() => {
@@ -122,8 +134,8 @@ export default function Lecturers() {
   };
 
   const getCourseName = (courseId) => {
-    const course = courses.find(c => c.id === courseId || c.code === courseId);
-    return course ? `${course.code} - ${course.name}` : courseId;
+    // Return the specialization ID exactly as stored - no normalization or conversion
+    return courseId;
   };
 
   const handleSort = () => {
@@ -191,8 +203,7 @@ export default function Lecturers() {
           <p className="text-muted-foreground mt-1">Manage faculty members and their specializations</p>
         </div>
         <div className="flex items-center gap-2">
-          <UIButton variant="outline">Download Template</UIButton>
-          <UIButton variant="outline">Import</UIButton>
+          <UIButton variant="outline" onClick={() => setImportOpen(true)}>Import</UIButton>
           <Button className="gap-2" onClick={() => setFormOpen(true)}>
             <Plus className="h-4 w-4" />
             Add Lecturer
@@ -272,7 +283,8 @@ export default function Lecturers() {
                 </TableHead>
                 <TableHead>Faculty</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Specializations</TableHead>
+                <TableHead>Specializations(Subject Groups)</TableHead>
+                <TableHead>Availability</TableHead>
                 <TableHead>Sessions/Day</TableHead>
                 <TableHead>Max Hours/Week</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -312,6 +324,30 @@ export default function Lecturers() {
                       )}
                     </div>
                   </TableCell>
+                  <TableCell>
+                    {lecturer.role === "Full-Time" || lecturer.role === "Faculty Dean" ? (
+                      <Badge variant="default" className="bg-green-500/10 text-green-700 border-green-500/20">
+                        Always Available
+                      </Badge>
+                    ) : lecturer.availability && Object.keys(lecturer.availability).length > 0 ? (
+                      <div className="space-y-1">
+                        {Object.entries(lecturer.availability).slice(0, 2).map(([day, slots]) => (
+                          <Badge key={day} variant="outline" className="text-xs">
+                            {day}: {slots.length} slot{slots.length !== 1 ? 's' : ''}
+                          </Badge>
+                        ))}
+                        {Object.keys(lecturer.availability).length > 2 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{Object.keys(lecturer.availability).length - 2} more
+                          </Badge>
+                        )}
+                      </div>
+                    ) : (
+                      <Badge variant="destructive" className="text-xs">
+                        Not Set
+                      </Badge>
+                    )}
+                  </TableCell>
                   <TableCell>{lecturer.sessions_per_day || 2}</TableCell>
                   <TableCell>{lecturer.max_weekly_hours || 22} hrs</TableCell>
                   <TableCell className="text-right">
@@ -348,7 +384,27 @@ export default function Lecturers() {
         onOpenChange={closeForm}
         onSubmit={editingLecturer ? handleEditLecturer : handleAddLecturer}
         lecturer={editingLecturer}
-        availableCourses={courses}
+        availableCourses={subjects}
+        canonicalGroups={canonicalGroups}
+      />
+
+      <ImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Lecturers"
+        description="Upload an Excel (.xlsx, .xls) or CSV (.csv) file to import lecturers. Required columns: Lecturer Id, Name, Role, Faculty, Specializations(Subject Groups) (comma-separated course group IDs, e.g., 'PROG_C, DATABASE_MGMT_SYSTEM, WEB_DEV'), Sessions/Day, Max Weekly Hours. For Part-Time lecturers, Availability is also required (format: 'MON:09:00-11:00,11:00-13:00|TUE:14:00-16:00'). For Full-Time and Faculty Dean, leave Availability empty (they are always available)."
+        entityType="lecturers"
+        requiredColumns={['Lecturer Id', 'Name', 'Role', 'Faculty', 'Specializations(Subject Groups)', 'Sessions/Day', 'Max Weekly Hours']}
+        optionalColumns={['Availability']}
+        onImport={async (data, onProgress) => {
+          try {
+            const response = await importAPI.importLecturers(data);
+            queryClient.invalidateQueries({ queryKey: ['lecturers'] });
+            return response;
+          } catch (error) {
+            throw error;
+          }
+        }}
       />
     </div>
   );

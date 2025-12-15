@@ -1,4 +1,4 @@
-// Type definitions for Course (converted from TypeScript)
+// Type definitions for Subject (converted from TypeScript)
 // These are kept as comments for reference but not enforced at runtime
 
 /**
@@ -9,7 +9,7 @@
  */
 
 /**
- * @typedef {Object} Course
+ * @typedef {Object} Subject
  * @property {string} id
  * @property {string} name
  * @property {string} faculty

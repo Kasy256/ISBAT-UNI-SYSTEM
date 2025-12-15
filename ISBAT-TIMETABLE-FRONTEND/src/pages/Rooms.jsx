@@ -27,15 +27,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RoomForm } from "@/components/rooms/RoomForm";
+import ImportDialog from "@/components/ImportDialog";
+import RoomSpecializations from "@/pages/RoomSpecializations";
 import { toast } from "sonner";
 import { Button as UIButton } from "@/components/ui/button";
-import { roomsAPI } from "@/lib/api";
+import { roomsAPI, importAPI } from "@/lib/api";
+import { Settings } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function Rooms() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [specializationsOpen, setSpecializationsOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState(undefined);
   const [sortBy, setSortBy] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
@@ -66,7 +77,7 @@ export default function Rooms() {
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => roomsAPI.update(id, data),
+    mutationFn: ({ room_number, data }) => roomsAPI.update(room_number, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rooms'] });
       toast.success("Room updated successfully");
@@ -113,8 +124,7 @@ export default function Rooms() {
   const filteredAndSortedRooms = useMemo(() => {
     let filtered = rooms.filter((room) => {
       const matchesSearch =
-        room.room_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        room.id?.toLowerCase().includes(searchQuery.toLowerCase());
+        room.room_number?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesType = typeFilter === "all" || room.room_type === typeFilter;
       return matchesSearch && matchesType;
     });
@@ -135,13 +145,13 @@ export default function Rooms() {
 
   const handleEditRoom = (roomData) => {
     if (editingRoom) {
-      updateMutation.mutate({ id: editingRoom.id, data: roomData });
+      updateMutation.mutate({ room_number: editingRoom.room_number, data: roomData });
     }
   };
 
-  const handleDeleteRoom = (id) => {
+  const handleDeleteRoom = (room_number) => {
     if (confirm("Are you sure you want to delete this room?")) {
-      deleteMutation.mutate(id);
+      deleteMutation.mutate(room_number);
     }
   };
 
@@ -166,8 +176,15 @@ export default function Rooms() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <UIButton variant="outline">Download Template</UIButton>
-          <UIButton variant="outline">Import</UIButton>
+          <UIButton 
+            variant="outline" 
+            onClick={() => setSpecializationsOpen(true)}
+            className="gap-2"
+          >
+            <Settings className="h-4 w-4" />
+            Manage Specializations
+          </UIButton>
+          <UIButton variant="outline" onClick={() => setImportOpen(true)}>Import</UIButton>
           <Button className="gap-2" onClick={() => setFormOpen(true)}>
             <Plus className="h-4 w-4" />
             Add Room
@@ -231,13 +248,14 @@ export default function Rooms() {
                 </TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Capacity</TableHead>
+                <TableHead>Specialization</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredAndSortedRooms.map((room) => (
-                <TableRow key={room.id}>
+                <TableRow key={room.room_number}>
                   <TableCell className="font-medium">{room.room_number}</TableCell>
                   <TableCell>
                     <Badge variant={getTypeBadgeVariant(room.room_type)}>
@@ -246,6 +264,19 @@ export default function Rooms() {
                   </TableCell>
                   <TableCell>
                     <span className="font-semibold">{room.capacity}</span> people
+                  </TableCell>
+                  <TableCell>
+                    {room.specializations && room.specializations.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {room.specializations.map((spec, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs">
+                            {spec}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">None</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -268,7 +299,7 @@ export default function Rooms() {
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive"
-                          onClick={() => handleDeleteRoom(room.id)}
+                          onClick={() => handleDeleteRoom(room.room_number)}
                         >
                           <Trash className="h-4 w-4 mr-2" />
                           Delete
@@ -279,7 +310,7 @@ export default function Rooms() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </Table> 
         )}
       </Card>
 
@@ -289,6 +320,36 @@ export default function Rooms() {
         onSubmit={editingRoom ? handleEditRoom : handleAddRoom}
         room={editingRoom}
       />
+
+      <ImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Rooms"
+        description="Upload an Excel (.xlsx, .xls) or CSV (.csv) file to import rooms. Required columns: Room Number, Capacity, Room Type, Specialization (comma-separated)."
+        entityType="rooms"
+        requiredColumns={['Room Number', 'Capacity', 'Room Type', 'Specialization']}
+        onImport={async (data, onProgress) => {
+          try {
+            const response = await importAPI.importRooms(data);
+            queryClient.invalidateQueries({ queryKey: ['rooms'] });
+            return response;
+          } catch (error) {
+            throw error;
+          }
+        }}
+      />
+
+      {/* Room Specializations Management Dialog */}
+      <Dialog open={specializationsOpen} onOpenChange={setSpecializationsOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Room Specializations</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            <RoomSpecializations />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

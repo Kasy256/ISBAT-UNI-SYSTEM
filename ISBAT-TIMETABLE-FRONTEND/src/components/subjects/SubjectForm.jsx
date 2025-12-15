@@ -18,17 +18,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function CourseForm({
+export function SubjectForm({
   open,
   onOpenChange,
   onSubmit,
-  course,
+  subject,
 }) {
   const [formData, setFormData] = useState({
-    id: "",
     code: "",
     name: "",
     weekly_hours: 0,
+    credits: 0,
     preferred_room_type: "Theory",
     preferred_term: "",
     semester: "",
@@ -37,25 +37,58 @@ export function CourseForm({
   });
 
   useEffect(() => {
-    if (course) {
+    if (subject) {
+      // Ensure values are properly set, handling null/undefined
+      // Normalize preferred_term to match SelectItem values
+      let preferredTerm = subject.preferred_term || "";
+      if (preferredTerm) {
+        // Normalize various formats to match SelectItem values
+        const normalized = preferredTerm.trim();
+        if (normalized.toLowerCase() === "term 1" || normalized.toLowerCase() === "term1" || normalized === "1") {
+          preferredTerm = "Term 1";
+        } else if (normalized.toLowerCase() === "term 2" || normalized.toLowerCase() === "term2" || normalized === "2") {
+          preferredTerm = "Term 2";
+        } else if (normalized.toLowerCase() === "either" || normalized === "") {
+          preferredTerm = "";
+        }
+        // If it's already "Term 1" or "Term 2", keep it as is
+      }
+      
+      // Normalize semester to match SelectItem values
+      let semester = subject.semester || "";
+      if (semester) {
+        // Normalize various formats to match SelectItem values (S1, S2, S3, S4, S5, S6)
+        const normalized = semester.trim().toUpperCase();
+        if (normalized.match(/^S[1-6]$/)) {
+          // Already in correct format (S1-S6)
+          semester = normalized;
+        } else if (normalized.match(/^[1-6]$/)) {
+          // Just the number, add S prefix
+          semester = `S${normalized}`;
+        } else {
+          // If it doesn't match, keep original or set to empty
+          semester = semester.trim();
+        }
+      }
+      
       setFormData({
-        id: course.id || "",
-        code: course.code || "",
-        name: course.name || "",
-        weekly_hours: course.weekly_hours || 0,
-        preferred_room_type: course.preferred_room_type || "Theory",
-        preferred_term: course.preferred_term || "",
-        semester: course.semester || "",
-        program: course.program || "",
-        course_group: course.course_group || "",
+        code: subject.code || subject.id || "", // Use code, fallback to id for backward compatibility
+        name: subject.name || "",
+        weekly_hours: subject.weekly_hours || 0,
+        credits: subject.credits || 0,
+        preferred_room_type: subject.preferred_room_type || "Theory",
+        preferred_term: preferredTerm,
+        semester: semester,
+        program: subject.program || "",
+        course_group: subject.course_group || "",
       });
     } else {
-      // Reset form for new course
+      // Reset form for new subject
       setFormData({
-        id: "",
         code: "",
         name: "",
         weekly_hours: 0,
+        credits: 0,
         preferred_room_type: "Theory",
         preferred_term: "",
         semester: "",
@@ -63,13 +96,16 @@ export function CourseForm({
         course_group: "",
       });
     }
-  }, [course, open]);
+  }, [subject, open]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     // Normalize form data before submission
+    // Use code as the id (primary key)
     const submitData = {
       ...formData,
+      id: formData.code, // Set id to code
+      credits: formData.credits || 0,
       semester: formData.semester === "none" ? "" : formData.semester,
       preferred_term: formData.preferred_term === "either" ? "" : formData.preferred_term,
       course_group: formData.course_group || null,
@@ -79,33 +115,19 @@ export function CourseForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto" key={subject?.code || subject?.id || 'new'}>
         <DialogHeader>
-          <DialogTitle>{course ? "Edit Course Unit" : "Add Course Unit"}</DialogTitle>
+          <DialogTitle>{subject ? "Edit Subject" : "Add Subject"}</DialogTitle>
           <DialogDescription>
-            {course
-              ? "Update course unit information"
-              : "Add a new course unit to the system"}
+            {subject
+              ? "Update subject information"
+              : "Add a new subject to the system"}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="id">Course ID *</Label>
-                <Input
-                  id="id"
-                  value={formData.id}
-                  onChange={(e) =>
-                    setFormData({ ...formData, id: e.target.value })
-                  }
-                  placeholder="CS101"
-                  required
-                  disabled={!!course} // Disable ID editing for existing courses
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="code">Course Code *</Label>
+                <Label htmlFor="code">Subject Code *</Label>
                 <Input
                   id="code"
                   value={formData.code}
@@ -114,12 +136,15 @@ export function CourseForm({
                   }
                   placeholder="CS101"
                   required
+                disabled={!!subject} // Disable code editing for existing subjects (code is the primary key)
                 />
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Subject Code is used as the unique identifier
+              </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="name">Course Name *</Label>
+              <Label htmlFor="name">Subject Name *</Label>
               <Input
                 id="name"
                 value={formData.name}
@@ -131,6 +156,7 @@ export function CourseForm({
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="weekly_hours">Weekly Hours *</Label>
               <Input
@@ -146,6 +172,22 @@ export function CourseForm({
                 }
                 required
               />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="credits">Credits</Label>
+                <Input
+                  id="credits"
+                  type="number"
+                  min="0"
+                  value={formData.credits}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      credits: parseInt(e.target.value) || 0,
+                    })
+                  }
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -181,13 +223,15 @@ export function CourseForm({
               <div className="space-y-2">
                 <Label htmlFor="semester">Semester</Label>
                 <Select
-                  value={formData.semester || "none"}
+                  value={formData.semester && formData.semester !== "" ? formData.semester : "none"}
                   onValueChange={(value) =>
                     setFormData({ ...formData, semester: value === "none" ? "" : value })
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select semester" />
+                    <SelectValue placeholder="Select semester">
+                      {formData.semester && formData.semester !== "" ? formData.semester : "None"}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
@@ -204,9 +248,9 @@ export function CourseForm({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="preferred_term">Preferred Term</Label>
+                <Label htmlFor="preferred_term">Prefered Term</Label>
                 <Select
-                  value={formData.preferred_term || "either"}
+                  value={formData.preferred_term && formData.preferred_term !== "" ? formData.preferred_term : "either"}
                   onValueChange={(value) =>
                     setFormData({ ...formData, preferred_term: value === "either" ? "" : value })
                   }
@@ -222,7 +266,7 @@ export function CourseForm({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="course_group">Course Group</Label>
+                <Label htmlFor="course_group">Subject Group</Label>
                 <Input
                   id="course_group"
                   value={formData.course_group || ""}
@@ -242,7 +286,7 @@ export function CourseForm({
             >
               Cancel
             </Button>
-            <Button type="submit">{course ? "Update" : "Add"} Course Unit</Button>
+            <Button type="submit">{subject ? "Update" : "Add"} Subject</Button>
           </DialogFooter>
         </form>
       </DialogContent>

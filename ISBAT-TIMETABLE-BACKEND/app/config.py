@@ -27,13 +27,15 @@ class Config:
     GGA_STALL_LIMIT = 100
     GGA_ELITE_SIZE = 10
     
-    # Time Slots
-    TIME_SLOTS = [
-        {'period': 'SLOT_1', 'start': '09:00', 'end': '11:00', 'is_afternoon': False},
-        {'period': 'SLOT_2', 'start': '11:00', 'end': '13:00', 'is_afternoon': False},
-        {'period': 'SLOT_3', 'start': '14:00', 'end': '16:00', 'is_afternoon': True},
-        {'period': 'SLOT_4', 'start': '16:00', 'end': '18:00', 'is_afternoon': True}
-    ]
+    # Time Slots - loaded dynamically from database
+    @staticmethod
+    def get_time_slots():
+        """Get time slots from database"""
+        from app.services.config_loader import get_time_slots_for_config
+        return get_time_slots_for_config()
+    
+    # Legacy fallback (only used if database is unavailable - should not happen in production)
+    TIME_SLOTS = []
     
     DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI']
     

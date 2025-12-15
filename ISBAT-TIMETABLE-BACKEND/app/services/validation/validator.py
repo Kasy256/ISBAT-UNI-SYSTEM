@@ -4,8 +4,8 @@ from collections import defaultdict
 from app.services.csp.constraints import ConstraintChecker
 from app.models.lecturer import Lecturer
 from app.models.room import Room
-from app.models.course import CourseUnit
-from app.models.student import StudentGroup
+from app.models.subject import CourseUnit
+from app.models.program import Program
 
 @dataclass
 class ValidationError:
@@ -66,7 +66,7 @@ class TimetableValidator:
     
     def validate_input_data(self, lecturers: List[Lecturer], rooms: List[Room],
                            course_units: List[CourseUnit], 
-                           student_groups: List[StudentGroup]) -> ValidationResult:
+                           programs: List[Program]) -> ValidationResult:
         """Validate input data before scheduling"""
         
         result = ValidationResult(is_valid=True, phase="INPUT_VALIDATION")
@@ -95,8 +95,8 @@ class TimetableValidator:
         result.total_checks += course_checks['total']
         result.passed_checks += course_checks['passed']
         
-        # Validate student groups
-        student_checks = self._validate_student_groups(student_groups, course_units)
+        # Validate programs
+        student_checks = self._validate_programs(programs, course_units)
         result.critical_errors.extend(student_checks['critical'])
         result.errors.extend(student_checks['errors'])
         result.warnings.extend(student_checks['warnings'])
@@ -105,7 +105,7 @@ class TimetableValidator:
         
         # Cross-reference validation
         cross_checks = self._validate_cross_references(
-            lecturers, rooms, course_units, student_groups
+            lecturers, rooms, course_units, programs
         )
         result.critical_errors.extend(cross_checks['critical'])
         result.errors.extend(cross_checks['errors'])
@@ -115,7 +115,7 @@ class TimetableValidator:
         
         # Feasibility checks
         feasibility_checks = self._validate_feasibility(
-            lecturers, rooms, course_units, student_groups
+            lecturers, rooms, course_units, programs
         )
         result.critical_errors.extend(feasibility_checks['critical'])
         result.errors.extend(feasibility_checks['errors'])
@@ -265,8 +265,7 @@ class TimetableValidator:
         total = 0
         passed = 0
         
-        # Build prerequisite graph for cycle detection
-        prereq_graph = {cu.id: cu.prerequisites for cu in course_units}
+        # Prerequisites are no longer used - removed prerequisite graph building
         
         for course_unit in course_units:
             # Check weekly hours
@@ -276,7 +275,7 @@ class TimetableValidator:
                     code="COURSE_INVALID_HOURS",
                     severity="HIGH",
                     category="DATA_INTEGRITY",
-                    message=f"Course {course_unit.code} has invalid weekly hours: {course_unit.weekly_hours}",
+                    message=f"Subject {course_unit.code} has invalid weekly hours: {course_unit.weekly_hours}",
                     affected_entities=[course_unit.id],
                     suggestion="Weekly hours should be between 1 and 8"
                 ))
@@ -290,38 +289,14 @@ class TimetableValidator:
                     code="COURSE_INVALID_CREDITS",
                     severity="MEDIUM",
                     category="DATA_INTEGRITY",
-                    message=f"Course {course_unit.code} has invalid credits: {course_unit.credits}",
+                    message=f"Subject {course_unit.code} has invalid credits: {course_unit.credits}",
                     affected_entities=[course_unit.id]
                 ))
             else:
                 passed += 1
             
-            # Check prerequisites exist
-            for prereq_id in course_unit.prerequisites:
-                total += 1
-                if not any(cu.id == prereq_id for cu in course_units):
-                    errors.append(ValidationError(
-                        code="COURSE_MISSING_PREREQUISITE",
-                        severity="HIGH",
-                        category="DATA_INTEGRITY",
-                        message=f"Course {course_unit.code} references non-existent prerequisite: {prereq_id}",
-                        affected_entities=[course_unit.id, prereq_id]
-                    ))
-                else:
-                    passed += 1
-        
-        # Check for circular prerequisites
-        cycles = self._detect_prerequisite_cycles(prereq_graph)
-        for cycle in cycles:
-            total += 1
-            critical.append(ValidationError(
-                code="COURSE_CIRCULAR_PREREQUISITES",
-                severity="CRITICAL",
-                category="LOGICAL_INCONSISTENCY",
-                message=f"Circular prerequisite chain detected: {' -> '.join(cycle)}",
-                affected_entities=cycle,
-                suggestion="Break the circular dependency"
-            ))
+            # Prerequisites validation removed - system now uses preferred_term directly
+            # No prerequisite checking needed
         
         if len(cycles) == 0:
             total += 1
@@ -335,16 +310,16 @@ class TimetableValidator:
             'passed': passed
         }
     
-    def _validate_student_groups(self, student_groups: List[StudentGroup], 
+    def _validate_programs(self, programs: List[Program], 
                                  course_units: List[CourseUnit]) -> Dict:
-        """Validate student group data"""
+        """Validate program data"""
         critical = []
         errors = []
         warnings = []
         total = 0
         passed = 0
         
-        for group in student_groups:
+        for group in programs:
             # Check size
             total += 1
             if group.size <= 0:
@@ -352,7 +327,7 @@ class TimetableValidator:
                     code="GROUP_INVALID_SIZE",
                     severity="CRITICAL",
                     category="DATA_INTEGRITY",
-                    message=f"Student group {group.id} has invalid size: {group.size}",
+                    message=f"Program {group.id} has invalid size: {group.size}",
                     affected_entities=[group.id]
                 ))
             else:
@@ -366,7 +341,7 @@ class TimetableValidator:
                         code="GROUP_MISSING_COURSE",
                         severity="HIGH",
                         category="DATA_INTEGRITY",
-                        message=f"Student group {group.id} references non-existent course: {cu_id}",
+                        message=f"Program {group.id} references non-existent subject: {cu_id}",
                         affected_entities=[group.id, cu_id]
                     ))
                 else:
@@ -382,7 +357,7 @@ class TimetableValidator:
     
     def _validate_cross_references(self, lecturers: List[Lecturer], rooms: List[Room],
                                    course_units: List[CourseUnit], 
-                                   student_groups: List[StudentGroup]) -> Dict:
+                                   programs: List[Program]) -> Dict:
         """Validate cross-references between entities"""
         critical = []
         errors = []
@@ -390,33 +365,42 @@ class TimetableValidator:
         total = 0
         passed = 0
         
-        # Check lecturer specializations reference valid courses
+        # Check lecturer specializations reference valid canonical groups (subject groups)
+        from app.services.canonical_courses import get_course_groupings
+        canonical_groups = get_course_groupings()
+        canonical_ids = set(canonical_groups.keys())
+        
+        # Also get all subject codes for backward compatibility check
         course_ids = set(cu.id for cu in course_units)
+        course_codes = set(cu.code for cu in course_units if cu.code)
+        
         for lecturer in lecturers:
             for spec in lecturer.specializations:
                 total += 1
-                if spec not in course_ids:
+                # Check if it's a canonical ID (preferred) or a subject code (backward compatibility)
+                if spec not in canonical_ids and spec not in course_ids and spec not in course_codes:
                     warnings.append(ValidationError(
                         code="LECTURER_UNKNOWN_SPECIALIZATION",
                         severity="MEDIUM",
                         category="CROSS_REFERENCE",
-                        message=f"Lecturer {lecturer.name} has specialization for unknown course: {spec}",
+                        message=f"Lecturer {lecturer.name} has specialization for unknown subject group or subject: {spec}",
                         affected_entities=[lecturer.id, spec]
                     ))
                 else:
                     passed += 1
         
-        # Check all courses have at least one qualified lecturer
-        for course in course_units:
+        # Check all subjects have at least one qualified lecturer (using canonical matching)
+        from app.services.canonical_courses import is_canonical_match
+        for subject in course_units:
             total += 1
-            qualified = [l for l in lecturers if course.id in l.specializations]
+            qualified = [l for l in lecturers if is_canonical_match(subject.id, l.specializations)]
             if len(qualified) == 0:
                 critical.append(ValidationError(
                     code="COURSE_NO_QUALIFIED_LECTURER",
                     severity="CRITICAL",
                     category="RESOURCE_CONFLICT",
-                    message=f"No lecturer qualified to teach {course.code}",
-                    affected_entities=[course.id],
+                    message=f"No lecturer qualified to teach {subject.code}",
+                    affected_entities=[subject.id],
                     suggestion="Add qualification to at least one lecturer"
                 ))
             else:
@@ -432,7 +416,7 @@ class TimetableValidator:
     
     def _validate_feasibility(self, lecturers: List[Lecturer], rooms: List[Room],
                              course_units: List[CourseUnit], 
-                             student_groups: List[StudentGroup]) -> Dict:
+                             programs: List[Program]) -> Dict:
         """Validate scheduling feasibility"""
         critical = []
         errors = []
@@ -441,11 +425,11 @@ class TimetableValidator:
         
         # Calculate total required hours
         total_required_hours = 0
-        for group in student_groups:
+        for group in programs:
             for cu_id in group.course_units:
-                course = next((cu for cu in course_units if cu.id == cu_id), None)
-                if course:
-                    total_required_hours += course.weekly_hours
+                subject = next((cu for cu in course_units if cu.id == cu_id), None)
+                if subject:
+                    total_required_hours += subject.weekly_hours
         
         # Calculate total lecturer capacity
         total_lecturer_capacity = sum(l.max_weekly_hours for l in lecturers)
@@ -458,13 +442,13 @@ class TimetableValidator:
                 category="FEASIBILITY",
                 message=f"Required teaching hours ({total_required_hours}) exceed total lecturer capacity ({total_lecturer_capacity})",
                 affected_entities=[],
-                suggestion="Hire more lecturers or reduce course offerings"
+                suggestion="Hire more lecturers or reduce subject offerings"
             ))
         else:
             passed += 1
         
         # Check room capacity feasibility
-        largest_group = max((g.size for g in student_groups), default=0)
+        largest_group = max((g.size for g in programs), default=0)
         largest_room = max((r.capacity for r in rooms), default=0)
         
         total += 1
@@ -473,7 +457,7 @@ class TimetableValidator:
                 code="INSUFFICIENT_ROOM_CAPACITY",
                 severity="CRITICAL",
                 category="FEASIBILITY",
-                message=f"Largest student group ({largest_group}) exceeds largest room capacity ({largest_room})",
+                message=f"Largest program ({largest_group}) exceeds largest room capacity ({largest_room})",
                 affected_entities=[],
                 suggestion="Add larger rooms or split large groups"
             ))
@@ -490,7 +474,7 @@ class TimetableValidator:
                 code="NO_LAB_ROOMS",
                 severity="CRITICAL",
                 category="FEASIBILITY",
-                message=f"{len(lab_courses)} lab courses but no lab rooms available",
+                message=f"{len(lab_courses)} lab subjects but no lab rooms available",
                 affected_entities=[],
                 suggestion="Add lab rooms"
             ))
@@ -505,33 +489,5 @@ class TimetableValidator:
         }
     
     def _detect_prerequisite_cycles(self, graph: Dict[str, List[str]]) -> List[List[str]]:
-        """Detect cycles in prerequisite graph using DFS"""
-        cycles = []
-        visited = set()
-        rec_stack = set()
-        
-        def dfs(node, path):
-            visited.add(node)
-            rec_stack.add(node)
-            path.append(node)
-            
-            for neighbor in graph.get(node, []):
-                if neighbor not in visited:
-                    if dfs(neighbor, path):
-                        return True
-                elif neighbor in rec_stack:
-                    # Cycle detected
-                    cycle_start = path.index(neighbor)
-                    cycle = path[cycle_start:] + [neighbor]
-                    cycles.append(cycle)
-                    return True
-            
-            path.pop()
-            rec_stack.remove(node)
-            return False
-        
-        for node in graph:
-            if node not in visited:
-                dfs(node, [])
-        
-        return cycles
+        """Legacy method - prerequisites are no longer used, always returns empty list"""
+        return []

@@ -1,12 +1,12 @@
 """
-Canonical Course Mapping System
+Canonical Subject Mapping System
 
-Maps course codes from different programs to canonical course identifiers.
-This allows lecturers to teach equivalent courses across programs without
+Maps subject codes from different programs to canonical subject identifiers.
+This allows lecturers to teach equivalent subjects across programs without
 duplicating specializations.
 
-IMPORTANT: Only courses with the SAME or VERY SIMILAR course unit names are grouped together.
-Based on actual BSCAIT and BCS course data from ISBAT University.
+IMPORTANT: Only subjects with the SAME or VERY SIMILAR course unit names are grouped together.
+Based on actual BSCAIT and BCS subject data from ISBAT University.
 
 Example:
     BIT1103 (Problem Solving Methodologies Using C - Theory)
@@ -17,7 +17,7 @@ Example:
     
     BIT1211 (Computer Hardware and Operating Systems)
     BCS1211 (Operating Systems)
-    → These are DIFFERENT courses and NOT grouped together
+    → These are DIFFERENT subjects and NOT grouped together
 """
 
 from typing import Dict, List, Optional
@@ -73,17 +73,31 @@ FALLBACK_CANONICAL_COURSE_MAPPING: Dict[str, List[str]] = {
 # Global cache for canonical mappings (loaded from database or fallback)
 CANONICAL_COURSE_MAPPING: Dict[str, List[str]] = {}
 COURSE_TO_CANONICAL: Dict[str, str] = {}
+# Mapping from human-readable names to canonical IDs (from database)
+NAME_TO_CANONICAL_ID: Dict[str, str] = {}
 
 
-def _load_canonical_mappings_from_db() -> Dict[str, List[str]]:
-    """Load canonical course mappings from database"""
+def _load_canonical_mappings_from_db(db=None) -> Dict[str, List[str]]:
+    """
+    Load canonical subject mappings from database
+    
+    Args:
+        db: Optional database instance. If None, tries to use Flask's get_db()
+    """
+    global NAME_TO_CANONICAL_ID
+    NAME_TO_CANONICAL_ID = {}
+    
     try:
-        from app import get_db
-        db = get_db()
+        # Use provided db or try to get from Flask context
+        if db is None:
+            from app import get_db
+            db = get_db()
+        
         groups = list(db.canonical_course_groups.find())
         
         if not groups:
             # Database is empty, use fallback
+            print("⚠️  No canonical groups found in database, using fallback mapping")
             return FALLBACK_CANONICAL_COURSE_MAPPING.copy()
         
         # Build mapping from database
@@ -91,13 +105,57 @@ def _load_canonical_mappings_from_db() -> Dict[str, List[str]]:
         for group in groups:
             canonical_id = group.get('canonical_id')
             course_codes = group.get('course_codes', [])
+            name = group.get('name', '')
+            
             if canonical_id and course_codes:
                 mapping[canonical_id] = course_codes
+                
+                # Build name-to-canonical-ID mapping for lecturer specialization matching
+                # Use the exact name from database to map to canonical_id
+                if name:
+                    # Store exact name
+                    NAME_TO_CANONICAL_ID[name] = canonical_id
+                    # Also store trimmed version (in case of whitespace differences)
+                    NAME_TO_CANONICAL_ID[name.strip()] = canonical_id
+                    # Also map the canonical_id to itself
+                    NAME_TO_CANONICAL_ID[canonical_id] = canonical_id
+        
+        if mapping:
+            print(f"✅ Loaded {len(mapping)} canonical groups from database")
+            # Show sample of loaded IDs
+            sample_ids = list(mapping.keys())[:3]
+            print(f"   Sample canonical IDs: {', '.join(sample_ids)}")
+            # Show sample of name mappings for debugging
+            sample_names = list(NAME_TO_CANONICAL_ID.items())[:3]
+            if sample_names:
+                print(f"   Sample name mappings: {', '.join([f'{name}→{cid}' for name, cid in sample_names])}")
+        else:
+            print("⚠️  Database has groups but mapping is empty, using fallback")
         
         return mapping if mapping else FALLBACK_CANONICAL_COURSE_MAPPING.copy()
-    except Exception:
+    except Exception as e:
         # Database unavailable, use fallback
+        print(f"⚠️  Error loading canonical groups from database: {e}, using fallback")
         return FALLBACK_CANONICAL_COURSE_MAPPING.copy()
+
+
+def _extract_course_code(course_entry: str) -> str:
+    """
+    Extract course code from various formats:
+    - "BIT1102" -> "BIT1102"
+    - "BIT1102 – Computer Organization and Architecture" -> "BIT1102"
+    - "BIT1102 - Computer Organization and Architecture" -> "BIT1102"
+    """
+    if not course_entry:
+        return course_entry
+    
+    # Handle em dash (—) and regular dash (-) with spaces
+    for separator in [' – ', ' - ', '—', '-']:
+        if separator in course_entry:
+            return course_entry.split(separator)[0].strip()
+    
+    # No separator found, return as-is (already just a code)
+    return course_entry.strip()
 
 
 def _rebuild_course_to_canonical():
@@ -105,14 +163,17 @@ def _rebuild_course_to_canonical():
     global COURSE_TO_CANONICAL
     COURSE_TO_CANONICAL = {}
     for canonical_id, course_codes in CANONICAL_COURSE_MAPPING.items():
-        for course_code in course_codes:
-            COURSE_TO_CANONICAL[course_code] = canonical_id
+        for course_entry in course_codes:
+            # Extract just the course code (handle "CODE – Name" format)
+            course_code = _extract_course_code(course_entry)
+            if course_code:
+                COURSE_TO_CANONICAL[course_code] = canonical_id
 
 
-def _initialize_mappings():
+def _initialize_mappings(db=None):
     """Initialize canonical mappings (load from DB or use fallback)"""
     global CANONICAL_COURSE_MAPPING
-    CANONICAL_COURSE_MAPPING = _load_canonical_mappings_from_db()
+    CANONICAL_COURSE_MAPPING = _load_canonical_mappings_from_db(db)
     _rebuild_course_to_canonical()
 
 
@@ -120,84 +181,159 @@ def _initialize_mappings():
 _initialize_mappings()
 
 
-def reload_canonical_mappings():
+def reload_canonical_mappings(db=None):
     """Reload canonical mappings from database (useful after updates)"""
-    _initialize_mappings()
+    _initialize_mappings(db)
 
 
 def get_canonical_id(course_code: str) -> Optional[str]:
     """
-    Get canonical course ID for a given course code.
+    Get canonical subject ID for a given subject code.
     
     Args:
-        course_code: Course code (e.g., 'BIT1103', 'BCS1103')
+        course_code: Subject code (e.g., 'BIT1103', 'BCS1103')
     
     Returns:
-        Canonical course ID (e.g., 'PROG_C') or None if not found
+        Canonical subject ID (e.g., 'PROG_C') or None if not found
     """
     return COURSE_TO_CANONICAL.get(course_code)
 
 
 def get_equivalent_courses(course_code: str) -> List[str]:
-    """Get all course codes equivalent to the given course code."""
+    """Get all subject codes equivalent to the given subject code."""
     canonical_id = get_canonical_id(course_code)
     if canonical_id:
-        return CANONICAL_COURSE_MAPPING.get(canonical_id, [])
+        # Get equivalent courses and extract just the codes
+        equivalent_entries = CANONICAL_COURSE_MAPPING.get(canonical_id, [])
+        return [_extract_course_code(entry) for entry in equivalent_entries if _extract_course_code(entry)]
     return [course_code]
 
 
 def is_canonical_match(course_code: str, lecturer_specializations: List[str]) -> bool:
     """
-    Check if a lecturer can teach a course based on canonical matching.
+    Check if a lecturer can teach a subject based on canonical matching.
+    
+    Uses canonical IDs directly from the database. Lecturer specializations can be:
+    - Canonical IDs from database (e.g., "COMPUTER-ORGNIZATION-AND-ARCHITECTURE")
+    - Human-readable names from database (e.g., "Computer Organization and Architecture")
+    - Subject codes (e.g., "BIT1102", "BCS1102")
     
     Args:
-        course_code: Course code to check (e.g., 'BCS1103') or canonical ID (e.g., 'PROG_C')
-        lecturer_specializations: List of lecturer specializations (can be course codes or canonical IDs)
+        course_code: Subject code to check (e.g., 'BCS1103') or canonical ID (e.g., 'COMPUTER-ORGNIZATION-AND-ARCHITECTURE')
+        lecturer_specializations: List of lecturer specializations
     
     Returns:
-        True if lecturer can teach the course, False otherwise
+        True if lecturer can teach the subject, False otherwise
     """
-    # First check if course_code is already a canonical ID
-    if course_code in CANONICAL_COURSE_MAPPING:
-        # course_code is a canonical ID - check if lecturer has it
-        if course_code in lecturer_specializations:
-            return True
-        # Also check if lecturer has any of the equivalent course codes
-        equivalent_courses = CANONICAL_COURSE_MAPPING.get(course_code, [])
-        for equiv_code in equivalent_courses:
-            if equiv_code in lecturer_specializations:
-                return True
+    if not lecturer_specializations:
         return False
     
-    # course_code is a regular course code - get its canonical ID
-    canonical_id = get_canonical_id(course_code)
+    # CRITICAL FIX: Check if course_code is already a canonical ID
+    # This happens when merged courses use canonical IDs as their IDs
+    if course_code in CANONICAL_COURSE_MAPPING:
+        canonical_id = course_code
+    else:
+        # Get canonical ID for the course code
+        canonical_id = get_canonical_id(course_code)
     
     if not canonical_id:
-        # No canonical ID - check direct match
+        # No canonical ID - check direct match with course code
         return course_code in lecturer_specializations
     
-    # Check if lecturer has the canonical ID
+    # Normalize canonical ID for comparison (handle underscores)
+    canonical_normalized = canonical_id.replace('_', '-').upper()
+    
+    # Check if lecturer has the canonical ID directly (exact match)
     if canonical_id in lecturer_specializations:
         return True
     
-    # Check if lecturer has any equivalent course codes
-    equivalent_courses = get_equivalent_courses(course_code)
+    # Check if lecturer has normalized version (handle spaces/hyphens variations)
+    for spec in lecturer_specializations:
+        spec_normalized = spec.replace('_', '-').replace(' ', '-').upper()
+        if spec_normalized == canonical_normalized:
+            return True
+    
+    # Check if lecturer has the human-readable name or any variation (map to canonical_id via NAME_TO_CANONICAL_ID)
+    # canonical_normalized already set above
+    
+    for spec in lecturer_specializations:
+        spec_clean = spec.strip()
+        
+        # Normalize lecturer specialization: spaces -> hyphens, underscores -> hyphens, uppercase
+        spec_normalized = spec_clean.replace('_', '-').replace(' ', '-').upper()
+        
+        # Check if normalized spec matches normalized canonical ID directly
+        if spec_normalized == canonical_normalized:
+            return True
+        
+        # Try exact match first (via NAME_TO_CANONICAL_ID)
+        mapped_canonical_id = NAME_TO_CANONICAL_ID.get(spec_clean)
+        if mapped_canonical_id:
+            mapped_normalized = mapped_canonical_id.replace('_', '-').upper()
+            if mapped_normalized == canonical_normalized:
+                return True
+        
+        # Try case-insensitive match for human-readable names and variations
+        spec_lower = spec_clean.lower()
+        
+        for db_name, db_canonical_id in NAME_TO_CANONICAL_ID.items():
+            if db_canonical_id == canonical_id:
+                # Check if lecturer spec matches the canonical name (case-insensitive)
+                if db_name.lower().strip() == spec_lower:
+                    return True
+                
+                # Check normalized name variations (handle spaces, underscores, hyphens)
+                db_name_normalized = db_name.replace('_', '-').replace(' ', '-').upper()
+                if spec_normalized == db_name_normalized:
+                    return True
+                
+                # Also check if lecturer spec matches canonical ID format (normalize both)
+                db_canonical_normalized = db_canonical_id.replace('_', '-').upper()
+                if spec_normalized == db_canonical_normalized:
+                    return True
+    
+    # Check if lecturer has any equivalent subject codes
+    # If course_code is already a canonical ID, get equivalent courses from the mapping
+    if course_code in CANONICAL_COURSE_MAPPING:
+        equivalent_entries = CANONICAL_COURSE_MAPPING[canonical_id]
+        equivalent_courses = [_extract_course_code(entry) for entry in equivalent_entries if _extract_course_code(entry)]
+    else:
+        equivalent_courses = get_equivalent_courses(course_code)
+    
     for equiv_code in equivalent_courses:
         if equiv_code in lecturer_specializations:
             return True
+    
+    # Additional fuzzy matching: Check if canonical ID is contained in specialization or vice versa
+    # This handles cases like "TAXATION" matching "BUSINESS-TAXATION" or "BUSINESS-TAXATION" matching "TAXATION"
+    for spec in lecturer_specializations:
+        spec_normalized = spec.replace('_', '-').replace(' ', '-').upper()
+        
+        # Check if canonical ID contains the specialization (e.g., "BUSINESS-TAXATION" in "TAXATION" -> no, but reverse might work)
+        # Or if specialization contains canonical ID (e.g., "BUSINESS-TAXATION" contains "TAXATION")
+        if canonical_normalized in spec_normalized or spec_normalized in canonical_normalized:
+            # But only if they share significant words (at least 2 words in common)
+            canon_words = set(canonical_normalized.split('-'))
+            spec_words = set(spec_normalized.split('-'))
+            common_words = canon_words & spec_words
+            if len(common_words) >= 2 or len(canon_words) == 1:  # Allow if canonical is single word (like "TAXATION")
+                return True
     
     return False
 
 
 def get_lecturer_qualified_courses(lecturer_specializations: List[str]) -> List[str]:
     """
-    Get all course codes a lecturer can teach based on their specializations.
+    Get all subject codes a lecturer can teach based on their specializations.
+    
+    Specializations are now stored as canonical IDs (subject groups), not individual subject codes.
+    This function expands canonical IDs to all equivalent subject codes.
     
     Args:
-        lecturer_specializations: List of lecturer specializations (can be course codes or canonical IDs)
+        lecturer_specializations: List of lecturer specializations (should be canonical IDs, but supports subject codes for backward compatibility)
     
     Returns:
-        List of all course codes the lecturer can teach
+        List of all subject codes the lecturer can teach
     """
     qualified_courses = []
     
@@ -205,77 +341,77 @@ def get_lecturer_qualified_courses(lecturer_specializations: List[str]) -> List[
         # Check if it's a canonical ID
         if spec in CANONICAL_COURSE_MAPPING:
             qualified_courses.extend(CANONICAL_COURSE_MAPPING[spec])
-        # Check if it's a course code
+        # Check if it's a subject code
         elif spec in COURSE_TO_CANONICAL:
-            # Add the course code itself
+            # Add the subject code itself
             qualified_courses.append(spec)
-            # Add all equivalent courses
+            # Add all equivalent subjects
             canonical_id = COURSE_TO_CANONICAL[spec]
             qualified_courses.extend(CANONICAL_COURSE_MAPPING.get(canonical_id, []))
         else:
-            # Unknown - add as-is (might be a course code not yet in mapping)
+            # Unknown - add as-is (might be a subject code not yet in mapping)
             qualified_courses.append(spec)
     
     # Remove duplicates while preserving order
     seen = set()
     unique_courses = []
-    for course in qualified_courses:
-        if course not in seen:
-            seen.add(course)
-            unique_courses.append(course)
+    for subject in qualified_courses:
+        if subject not in seen:
+            seen.add(subject)
+            unique_courses.append(subject)
     
     return unique_courses
 
 
 def get_course_groupings() -> Dict[str, List[str]]:
     """
-    Get a summary of all course groupings for review.
+    Get a summary of all subject groupings for review.
     
     Returns:
-        Dictionary with canonical IDs and their grouped courses
+        Dictionary with canonical IDs and their grouped subjects
     """
     return CANONICAL_COURSE_MAPPING.copy()
 
 
 def print_groupings():
-    """Print all course groupings in a readable format."""
+    """Print all subject groupings in a readable format."""
     print("=" * 80)
-    print("CANONICAL COURSE GROUPINGS - ISBAT UNIVERSITY")
+    print("CANONICAL SUBJECT GROUPINGS - ISBAT UNIVERSITY")
     print("=" * 80)
     
     grouped = {}
     standalone_bit = []
     standalone_bcs = []
     
-    for canonical_id, courses in CANONICAL_COURSE_MAPPING.items():
-        if len(courses) > 1:
-            grouped[canonical_id] = courses
-        elif len(courses) == 1:
-            if courses[0].startswith('BIT'):
-                standalone_bit.append((courses[0], canonical_id))
-            elif courses[0].startswith('BCS'):
-                standalone_bcs.append((courses[0], canonical_id))
+    for canonical_id, subjects in CANONICAL_COURSE_MAPPING.items():
+        if len(subjects) > 1:
+            grouped[canonical_id] = subjects
+        elif len(subjects) == 1:
+            if subjects[0].startswith('BIT'):
+                standalone_bit.append((subjects[0], canonical_id))
+            elif subjects[0].startswith('BCS'):
+                standalone_bcs.append((subjects[0], canonical_id))
     
-    print("\n📚 GROUPED COURSES (Equivalent across BSCAIT and BCS):")
+    print("\n📚 GROUPED SUBJECTS (Equivalent across BSCAIT and BCS):")
     print("-" * 80)
-    for canonical_id, courses in sorted(grouped.items()):
+    for canonical_id, subjects in sorted(grouped.items()):
         print(f"\n{canonical_id}:")
-        for course in courses:
-            print(f"  • {course}")
+        for subject in subjects:
+            print(f"  • {subject}")
     
-    print("\n\n🔵 BSCAIT-SPECIFIC COURSES (No BCS equivalent):")
+    print("\n\n🔵 BSCAIT-SPECIFIC SUBJECTS (No BCS equivalent):")
     print("-" * 80)
-    for course, canonical_id in sorted(standalone_bit):
-        print(f"  • {course} → {canonical_id}")
+    for subject, canonical_id in sorted(standalone_bit):
+        print(f"  • {subject} → {canonical_id}")
     
-    print("\n\n🟢 BCS-SPECIFIC COURSES (No BSCAIT equivalent):")
+    print("\n\n🟢 BCS-SPECIFIC SUBJECTS (No BSCAIT equivalent):")
     print("-" * 80)
-    for course, canonical_id in sorted(standalone_bcs):
-        print(f"  • {course} → {canonical_id}")
+    for subject, canonical_id in sorted(standalone_bcs):
+        print(f"  • {subject} → {canonical_id}")
     
     print("\n" + "=" * 80)
     print(f"Total Canonical IDs: {len(CANONICAL_COURSE_MAPPING)}")
-    print(f"Grouped courses: {len(grouped)}")
+    print(f"Grouped subjects: {len(grouped)}")
     print(f"BSCAIT-specific: {len(standalone_bit)}")
     print(f"BCS-specific: {len(standalone_bcs)}")
     print("=" * 80)
@@ -287,7 +423,7 @@ def get_verification_report():
     print("VERIFICATION REPORT - KEY DIFFERENCES")
     print("=" * 80)
     
-    print("\n✅ CORRECTLY GROUPED COURSES:")
+    print("\n✅ CORRECTLY GROUPED SUBJECTS:")
     print("-" * 80)
     
     equivalents = [
@@ -318,13 +454,13 @@ if __name__ == "__main__":
     print("\n\n🧪 EXAMPLE TESTS:")
     print("-" * 80)
     
-    # Test 1: Equivalent courses
-    print("\nTest 1: Get equivalent courses for BIT1103 (Programming in C)")
+    # Test 1: Equivalent subjects
+    print("\nTest 1: Get equivalent subjects for BIT1103 (Programming in C)")
     equiv = get_equivalent_courses('BIT1103')
     print(f"  Result: {equiv}")
     print(f"  ✅ BIT1103 and BCS1103 are grouped (both teach C programming)")
     
-    # Test 2: Different courses (should NOT be grouped)
+    # Test 2: Different subjects (should NOT be grouped)
     print("\nTest 2: Check if BIT1211 and BCS1211 are equivalent")
     bit_canonical = get_canonical_id('BIT1211')
     bcs_canonical = get_canonical_id('BCS1211')
@@ -339,7 +475,7 @@ if __name__ == "__main__":
     print(f"  BIT1101 equivalents: {bit_office}")
     print(f"  ✅ Now correctly grouped (all teach Office Applications)")
     
-    # Test 4: Database courses (should NOW be grouped)
+    # Test 4: Database subjects (should NOW be grouped)
     print("\nTest 4: Check if BIT1212 and BCS1212 are equivalent")
     bit_db_canonical = get_canonical_id('BIT1212')
     bcs_db_canonical = get_canonical_id('BCS1212')
@@ -354,13 +490,13 @@ if __name__ == "__main__":
     qualified = get_lecturer_qualified_courses(lecturer_specs)
     print(f"  Specializations: {lecturer_specs}")
     print(f"  Can teach: {qualified}")
-    print(f"  ✅ Can teach both BIT1103 and BCS1103 (equivalent courses)")
+    print(f"  ✅ Can teach both BIT1103 and BCS1103 (equivalent subjects)")
     
     # Test 7: Mobile App Development (grouped with theory+practical)
     print("\nTest 7: Mobile Application Development equivalents")
     mobile_equiv = get_equivalent_courses('BIT3131')
     print(f"  BIT3131 equivalents: {mobile_equiv}")
-    print(f"  ✅ Includes BIT theory, BIT practical, and BCS course")
+    print(f"  ✅ Includes BIT theory, BIT practical, and BCS subject")
     
     print("\n" + "=" * 80)
     print("✅ All tests passed! Canonical mapping is correct.")

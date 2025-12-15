@@ -9,18 +9,18 @@ timetable-scheduler/
 │   ├── config.py                  # Configuration settings
 │   ├── models/                    # Data models
 │   │   ├── lecturer.py           # Lecturer model
-│   │   ├── course.py             # Course unit model
+│   │   ├── subject.py             # Subject unit model
 │   │   ├── room.py               # Room model
-│   │   ├── student.py            # Student group model
+│   │   ├── program.py            # Program model
 │   │   └── user.py               # User model (auth)
 │   ├── middleware/                # Middleware layer
 │   │   └── auth.py               # JWT authentication
 │   ├── api/routes/                # API endpoints
 │   │   ├── auth.py               # Authentication routes
-│   │   ├── courses.py            # Course CRUD
+│   │   ├── subjects.py            # Subject CRUD
 │   │   ├── lecturers.py          # Lecturer CRUD
 │   │   ├── rooms.py              # Room CRUD
-│   │   ├── students.py           # Student group CRUD
+│   │   ├── programs.py           # Program CRUD
 │   │   ├── timetable.py          # Timetable generation
 │   │   └── validation.py         # Validation endpoints
 │   └── services/                  # Core business logic
@@ -40,9 +40,9 @@ timetable-scheduler/
 │
 ├── seed_data.py                   # ✅ Main seeding script
 ├── seed_lecturers_data.py         # ✅ Lecturer seed data (15)
-├── seed_courses_data.py           # ✅ Course seed data (30)
+├── seed_courses_data.py           # ✅ Subject seed data (30)
 ├── seed_rooms_data.py             # ✅ Room seed data (27)
-├── seed_student_groups_data.py    # ✅ Student group seed data (12)
+├── seed_programs_data.py         # ✅ Program seed data (12)
 │
 ├── run.py                         # ✅ Application entry point
 ├── test_api.py                    # ✅ API testing script
@@ -58,15 +58,15 @@ timetable-scheduler/
 ## 📊 File Statistics
 
 ### Core Application Code
-- **Models**: 5 files (Lecturer, Course, Room, Student, User)
-- **API Routes**: 7 files (Auth, Courses, Lecturers, Rooms, Students, Timetable, Validation)
+- **Models**: 5 files (Lecturer, Subject, Room, Program, User)
+- **API Routes**: 7 files (Auth, Subjects, Lecturers, Rooms, Programs, Timetable, Validation)
 - **Services**: 10 files (CSP, GGA, Preprocessing, Validation)
 - **Middleware**: 1 file (JWT Auth)
 
 ### Seed Data
-- **Modular Seed Files**: 4 files (Lecturers, Courses, Rooms, Students)
+- **Modular Seed Files**: 4 files (Lecturers, Subjects, Rooms, Programs)
 - **Master Seed Script**: 1 file (seed_data.py)
-- **Total Records**: 84 (15 lecturers + 30 courses + 27 rooms + 12 student groups)
+- **Total Records**: 84 (15 lecturers + 30 subjects + 27 rooms + 12 programs)
 
 ### Documentation
 - **Essential Docs**: 5 files (README, SYSTEM_OVERVIEW, 2 verifications, seeding guide)
@@ -80,9 +80,9 @@ timetable-scheduler/
 
 ### 2. Comprehensive Seed Data
 - ✅ 15 lecturers with availability and specializations
-- ✅ 30 courses with prerequisites and metadata
+- ✅ 30 subjects with prerequisites and metadata
 - ✅ 27 rooms across 2 campuses
-- ✅ 12 student groups (semester-level, no term splits)
+- ✅ 12 programs (semester-level, no term splits)
 
 ### 3. Intelligent Scheduling
 - ✅ CSP for hard constraints (10 constraints)

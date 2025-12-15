@@ -1,4 +1,4 @@
-﻿import random
+import random
 import time
 from typing import List, Dict, Optional
 from collections import defaultdict
@@ -12,31 +12,31 @@ from app.services.canonical_courses import CANONICAL_COURSE_MAPPING, get_canonic
 class GGAEngine:
     """Guided Genetic Algorithm engine for timetable optimization"""
     
-    def __init__(self, course_units: Dict, student_groups: Dict, 
+    def __init__(self, course_units: Dict, programs: Dict, 
                  lecturers: Dict, rooms: Dict, 
                  variable_pairs: Optional[Dict[str, List[str]]] = None,
                  canonical_course_groups: Optional[Dict[str, Dict[int, List[str]]]] = None):
         self.course_units = course_units
-        self.student_groups = student_groups
+        self.programs = programs
         self.lecturers = lecturers
         self.rooms = rooms
         
         # Theory/practical pairs: gene_id -> list of paired gene_ids
         self.variable_pairs = variable_pairs or {}
         
-        # Canonical course groups: canonical_course_id -> {session_number: [gene_ids]}
-        # Ensures canonical merged courses are scheduled at same time
+        # Canonical subject groups: canonical_course_id -> {session_number: [gene_ids]}
+        # Ensures canonical merged subjects are scheduled at same time
         self.canonical_course_groups = canonical_course_groups or {}
         
         self.fitness_evaluator = FitnessEvaluator(
-            course_units, student_groups, lecturers, rooms
+            course_units, programs, lecturers, rooms
         )
         
         self.constraint_checker = ConstraintChecker()
         
         self.operators = GeneticOperators(
             self.constraint_checker, lecturers, rooms, 
-            course_units, student_groups,
+            course_units, programs,
             variable_pairs=variable_pairs,
             canonical_course_groups=canonical_course_groups
         )
@@ -183,32 +183,65 @@ class GGAEngine:
         base.id = "BASE_0"
         population.append(base)
         
-        # Generate diverse variants
+        # Generate diverse variants with more aggressive randomization
         for i in range(1, self.population_size):
             variant = base_chromosome.clone()
             variant.id = f"INIT_{i}"
             
-            # Apply random mutations for diversity
-            strategy = i % 5
+            # Apply random mutations for diversity - use random strategy selection
+            strategy = random.randint(0, 6)  # More strategies for diversity
             
-            if strategy == 0:  # Time slot permutation (skip for initialization)
-                # Don't swap during initialization to maintain CSP validity
-                pass
+            if strategy == 0:  # Room reallocation (light)
+                max_mutations = min(15, len(variant.genes))
+                if max_mutations > 0:
+                    num_mutations = random.randint(min(5, max_mutations), max_mutations)
+                    for gene in random.sample(variant.genes, num_mutations):
+                        self.operators._mutate_room(gene)
             
-            elif strategy == 1:  # Room reallocation
-                for gene in random.sample(variant.genes, min(10, len(variant.genes))):
-                    self.operators._mutate_room(gene)
+            elif strategy == 1:  # Lecturer swapping (light)
+                max_mutations = min(15, len(variant.genes))
+                if max_mutations > 0:
+                    num_mutations = random.randint(min(5, max_mutations), max_mutations)
+                    for gene in random.sample(variant.genes, num_mutations):
+                        self.operators._mutate_lecturer(gene)
             
-            elif strategy == 2:  # Lecturer swapping
-                for gene in random.sample(variant.genes, min(10, len(variant.genes))):
-                    self.operators._mutate_lecturer(gene)
+            elif strategy == 2:  # Combined room + lecturer mutations
+                max_mutations = min(20, len(variant.genes))
+                if max_mutations > 0:
+                    num_mutations = random.randint(min(8, max_mutations), max_mutations)
+                    genes_to_mutate = random.sample(variant.genes, num_mutations)
+                    for gene in genes_to_mutate:
+                        if random.random() < 0.5:
+                            self.operators._mutate_room(gene)
+                        else:
+                            self.operators._mutate_lecturer(gene)
             
             elif strategy == 3:  # Day compaction
                 variant = self.operators._compact_schedule_mutation(variant)
             
-            else:  # Keep base solution (no random perturbation in init)
-                # Maintain CSP validity during initialization
-                pass
+            elif strategy == 4:  # Heavy room mutations
+                max_mutations = min(30, len(variant.genes))
+                if max_mutations > 0:
+                    num_mutations = random.randint(min(15, max_mutations), max_mutations)
+                    for gene in random.sample(variant.genes, num_mutations):
+                        self.operators._mutate_room(gene)
+            
+            elif strategy == 5:  # Heavy lecturer mutations
+                max_mutations = min(30, len(variant.genes))
+                if max_mutations > 0:
+                    num_mutations = random.randint(min(15, max_mutations), max_mutations)
+                    for gene in random.sample(variant.genes, num_mutations):
+                        self.operators._mutate_lecturer(gene)
+            
+            else:  # Minimal mutation (keep mostly base solution)
+                max_mutations = min(5, len(variant.genes))
+                if max_mutations > 0:
+                    num_mutations = random.randint(1, max_mutations)
+                    for gene in random.sample(variant.genes, num_mutations):
+                        if random.random() < 0.5:
+                            self.operators._mutate_room(gene)
+                        else:
+                            self.operators._mutate_lecturer(gene)
             
             population.append(variant)
         
@@ -307,7 +340,7 @@ class GGAEngine:
         context.lecturers = {lid: self._lecturer_to_dict(l) for lid, l in self.lecturers.items()}
         context.rooms = {rid: self._room_to_dict(r) for rid, r in self.rooms.items()}
         context.course_units = {cid: self._course_to_dict(c) for cid, c in self.course_units.items()}
-        context.student_groups = {gid: self._group_to_dict(g) for gid, g in self.student_groups.items()}
+        context.programs = {gid: self._group_to_dict(g) for gid, g in self.programs.items()}
         
         constraint_checker = ConstraintChecker()
         
@@ -405,13 +438,14 @@ class GGAEngine:
         gene = violation['gene']
         course_id = gene.course_unit_id
         
-        # Find alternative lecturers for this course
+        # Find alternative lecturers for this subject
         alternative_lecturers = []
+        from app.services.canonical_courses import is_canonical_match
         for lec_id, lecturer in self.lecturers.items():
             if lec_id == gene.lecturer_id:
                 continue
             specializations = lecturer.specializations if hasattr(lecturer, 'specializations') else lecturer.get('specializations', [])
-            if course_id in specializations:
+            if is_canonical_match(course_id, specializations):
                 alternative_lecturers.append(lec_id)
         
         if alternative_lecturers:
@@ -670,7 +704,7 @@ class GGAEngine:
         return [g for g in chromosome.genes if g.session_id in paired_ids]
     
     def _get_canonical_group_genes(self, canonical_id: str, session_number: int, chromosome: Chromosome) -> List:
-        """Get all genes for a canonical course group at a specific session number"""
+        """Get all genes for a canonical subject group at a specific session number"""
         if canonical_id not in self.canonical_course_groups:
             return []
         session_genes = self.canonical_course_groups[canonical_id].get(session_number, [])
@@ -679,10 +713,10 @@ class GGAEngine:
     def _get_canonical_genes_for_gene(self, gene, chromosome: Chromosome) -> List:
         """Get all canonical group genes for a given gene using CANONICAL_COURSE_MAPPING"""
         canonical_genes = []
-        # Get canonical ID for this gene's course
+        # Get canonical ID for this gene's subject
         gene_canonical_id = get_canonical_id(gene.course_unit_id) or gene.course_unit_id
         
-        # Check if this course is in a canonical group
+        # Check if this subject is in a canonical group
         if gene_canonical_id in self.canonical_course_groups:
             session_map = self.canonical_course_groups[gene_canonical_id]
             gene_ids = session_map.get(gene.session_number, [])
@@ -708,12 +742,12 @@ class GGAEngine:
         return True
     
     def _validate_canonical_groups_preserved(self, chromosome: Chromosome) -> bool:
-        """Validate that canonical merged courses are scheduled at same time"""
+        """Validate that canonical merged subjects are scheduled at same time"""
         for canonical_id, session_map in self.canonical_course_groups.items():
             for session_num, gene_ids in session_map.items():
                 canonical_genes = [g for g in chromosome.genes if g.session_id in gene_ids]
                 if len(canonical_genes) > 1:
-                    # All genes for this canonical course at this session should be at same time
+                    # All genes for this canonical subject at this session should be at same time
                     first_gene = canonical_genes[0]
                     first_day = first_gene.time_slot['day'] if isinstance(first_gene.time_slot, dict) else first_gene.time_slot.day
                     first_period = first_gene.time_slot['period'] if isinstance(first_gene.time_slot, dict) else first_gene.time_slot.period
@@ -748,7 +782,7 @@ class GGAEngine:
         context.lecturers = {lid: self._lecturer_to_dict(l) for lid, l in self.lecturers.items()}
         context.rooms = {rid: self._room_to_dict(r) for rid, r in self.rooms.items()}
         context.course_units = {cid: self._course_to_dict(c) for cid, c in self.course_units.items()}
-        context.student_groups = {gid: self._group_to_dict(g) for gid, g in self.student_groups.items()}
+        context.programs = {gid: self._group_to_dict(g) for gid, g in self.programs.items()}
         
         # Build variable_pairs mapping for constraint context (CRITICAL for proper conflict detection)
         context.variable_pairs = self.variable_pairs
@@ -759,7 +793,7 @@ class GGAEngine:
             
             # CRITICAL: ALWAYS check double-booking FIRST - this is the most important constraint
             # The constraint correctly handles pairs (allows paired variables at same time)
-            # but prevents conflicts with unrelated courses
+            # but prevents conflicts with unrelated subjects
             if not self.constraint_checker.check_constraint(
                 ConstraintType.NO_DOUBLE_BOOKING, assignment, context
             ):
@@ -777,7 +811,7 @@ class GGAEngine:
             ):
                 return False
             
-            # Check same-day repetition (HARD constraint - course can only be scheduled once per day)
+            # Check same-day repetition (HARD constraint - subject can only be scheduled once per day)
             if not self.constraint_checker.check_constraint(
                 ConstraintType.NO_SAME_DAY, assignment, context
             ):
@@ -809,17 +843,17 @@ class GGAEngine:
             'room_type': room.room_type if hasattr(room, 'room_type') else room.get('room_type', 'Theory')
         }
     
-    def _course_to_dict(self, course) -> dict:
-        """Convert course object to dict for constraint context"""
-        if isinstance(course, dict):
-            return course
+    def _course_to_dict(self, subject) -> dict:
+        """Convert subject object to dict for constraint context"""
+        if isinstance(subject, dict):
+            return subject
         return {
-            'id': course.id if hasattr(course, 'id') else course.get('id'),
-            'preferred_room_type': course.preferred_room_type if hasattr(course, 'preferred_room_type') else course.get('preferred_room_type', 'Theory')
+            'id': subject.id if hasattr(subject, 'id') else subject.get('id'),
+            'preferred_room_type': subject.preferred_room_type if hasattr(subject, 'preferred_room_type') else subject.get('preferred_room_type', 'Theory')
         }
     
     def _group_to_dict(self, group) -> dict:
-        """Convert student group object to dict for constraint context"""
+        """Convert program object to dict for constraint context"""
         if isinstance(group, dict):
             return group
         return {

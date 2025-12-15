@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { authAPI } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -13,6 +14,14 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { isAuthenticated, login } = useAuth();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,8 +30,9 @@ export default function Login() {
     try {
       const response = await authAPI.login(email, password);
       if (response.access_token) {
+        login(response.access_token); // Update auth context
         toast.success("Login successful!");
-        navigate("/");
+        navigate("/", { replace: true });
       } else {
         toast.error("Login failed. Please check your credentials.");
       }
@@ -32,6 +42,11 @@ export default function Login() {
       setIsLoading(false);
     }
   };
+
+  // Show loading if checking authentication
+  if (isAuthenticated) {
+    return null; // Will redirect via useEffect
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 p-4">

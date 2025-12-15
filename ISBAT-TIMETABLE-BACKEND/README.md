@@ -4,7 +4,7 @@ An enterprise-grade automated timetable scheduling system using CSP (Constraint 
 
 ## Features
 
-✅ **Intelligent Term Splitting**: Automatically splits semester courses into Term 1 and Term 2  
+✅ **Intelligent Term Splitting**: Automatically splits semester subjects into Term 1 and Term 2  
 ✅ **CSP Engine**: Ensures all hard constraints are satisfied  
 ✅ **GGA Optimization**: Optimizes soft constraints for quality schedules  
 ✅ **JWT Authentication**: Secure role-based access control  
@@ -187,7 +187,7 @@ Content-Type: application/json
     {
       "lecturer_id": "L001",
       "room_id": "R001",
-      "student_group_id": "SG001",
+      "program_id": "SG001",
       "time_slot": {"day": "MON", "period": "SLOT_1"}
     }
   ]
@@ -236,8 +236,8 @@ All CRUD endpoints require authentication:
 
 **Lecturers**: `/api/lecturers/`  
 **Rooms**: `/api/rooms/`  
-**Courses**: `/api/courses/`  
-**Students**: `/api/students/`
+**Subjects**: `/api/subjects/`  
+**Programs**: `/api/programs/`
 
 Each supports:
 - `GET /` - List all
@@ -251,7 +251,7 @@ Each supports:
 
 | Role | Permissions |
 |------|-------------|
-| **Viewer** | View timetables, lecturers, rooms, courses |
+| **Viewer** | View timetables, lecturers, rooms, subjects |
 | **Scheduler** | All viewer permissions + Generate/modify timetables |
 | **Admin** | All permissions + User management |
 
@@ -512,10 +512,10 @@ For questions: Contact development team
 
 ## Features
 
-- **Intelligent Term Splitting**: Automatically splits semester courses into Term 1 and Term 2 based on prerequisites, difficulty, and workload balance
+- **Intelligent Term Splitting**: Automatically splits semester subjects into Term 1 and Term 2 based on prerequisites, difficulty, and workload balance
 - **CSP Engine**: Ensures all hard constraints are satisfied (no double-booking, room capacity, lecturer qualifications, etc.)
 - **GGA Optimization**: Optimizes soft constraints for better student experience, lecturer workload balance, and resource utilization
-- **REST API**: Full CRUD operations for managing lecturers, rooms, courses, and student groups
+- **REST API**: Full CRUD operations for managing lecturers, rooms, subjects, and programs
 - **MongoDB Storage**: Persistent storage of schedules and configurations
 
 ## Architecture
@@ -601,21 +601,21 @@ The API will be available at `http://localhost:5000`
 - `DELETE /api/rooms/<id>` - Delete room
 - `POST /api/rooms/bulk` - Bulk create rooms
 
-### Courses
-- `GET /api/courses` - Get all course units
-- `GET /api/courses/<id>` - Get specific course
-- `POST /api/courses` - Create course
-- `PUT /api/courses/<id>` - Update course
-- `DELETE /api/courses/<id>` - Delete course
-- `POST /api/courses/bulk` - Bulk create courses
+### Subjects
+- `GET /api/subjects` - Get all course units
+- `GET /api/subjects/<id>` - Get specific subject
+- `POST /api/subjects` - Create subject
+- `PUT /api/subjects/<id>` - Update subject
+- `DELETE /api/subjects/<id>` - Delete subject
+- `POST /api/subjects/bulk` - Bulk create subjects
 
-### Student Groups
-- `GET /api/students` - Get all student groups
-- `GET /api/students/<id>` - Get specific group
-- `POST /api/students` - Create student group
-- `PUT /api/students/<id>` - Update group
-- `DELETE /api/students/<id>` - Delete group
-- `POST /api/students/bulk` - Bulk create groups
+### Programs
+- `GET /api/programs` - Get all programs
+- `GET /api/programs/<id>` - Get specific program
+- `POST /api/programs` - Create program
+- `PUT /api/programs/<id>` - Update program
+- `DELETE /api/programs/<id>` - Delete program
+- `POST /api/programs/bulk` - Bulk create programs
 
 ### Timetable Generation
 - `POST /api/timetable/generate` - Generate new timetable
@@ -761,7 +761,7 @@ For BSCAIT prototype (2 batches, 6 semesters):
 }
 ```
 
-### Student Group
+### Program
 ```json
 {
   "id": "SG_BSCAIT_S126_S1_T1",

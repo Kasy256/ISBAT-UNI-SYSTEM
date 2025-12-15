@@ -17,7 +17,93 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { X } from "lucide-react";
+import { X, Plus } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+
+// Availability Selector Component
+function AvailabilitySelector({ availability, onChange }) {
+  const days = ["MON", "TUE", "WED", "THU", "FRI"];
+  const timeSlots = [
+    "09:00-11:00",
+    "11:00-13:00",
+    "14:00-16:00",
+    "16:00-18:00",
+    "18:00-20:00",
+  ];
+
+  const toggleDayTimeSlot = (day, timeSlot) => {
+    const newAvailability = { ...availability };
+    if (!newAvailability[day]) {
+      newAvailability[day] = [];
+    }
+    
+    const index = newAvailability[day].indexOf(timeSlot);
+    if (index > -1) {
+      // Remove time slot
+      newAvailability[day] = newAvailability[day].filter(ts => ts !== timeSlot);
+      if (newAvailability[day].length === 0) {
+        delete newAvailability[day];
+      }
+    } else {
+      // Add time slot
+      newAvailability[day] = [...newAvailability[day], timeSlot].sort();
+    }
+    
+    onChange(newAvailability);
+  };
+
+  const isTimeSlotSelected = (day, timeSlot) => {
+    return availability[day]?.includes(timeSlot) || false;
+  };
+
+  return (
+    <div className="space-y-3 p-3 border rounded-md">
+      {days.map((day) => (
+        <div key={day} className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id={`day-${day}`}
+              checked={availability[day] && availability[day].length > 0}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  // Select all time slots for the day
+                  onChange({
+                    ...availability,
+                    [day]: [...timeSlots],
+                  });
+                } else {
+                  // Remove all time slots for the day
+                  const newAvailability = { ...availability };
+                  delete newAvailability[day];
+                  onChange(newAvailability);
+                }
+              }}
+            />
+            <Label htmlFor={`day-${day}`} className="font-medium min-w-[60px]">
+              {day}
+            </Label>
+          </div>
+          {availability[day] && availability[day].length > 0 && (
+            <div className="flex flex-wrap gap-2 ml-7">
+              {timeSlots.map((timeSlot) => (
+                <Button
+                  key={timeSlot}
+                  type="button"
+                  variant={isTimeSlotSelected(day, timeSlot) ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => toggleDayTimeSlot(day, timeSlot)}
+                >
+                  {timeSlot}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function LecturerForm({
   open,
@@ -25,6 +111,7 @@ export function LecturerForm({
   onSubmit,
   lecturer,
   availableCourses = [],
+  canonicalGroups = [],
 }) {
   const [formData, setFormData] = useState({
     id: "",
@@ -39,18 +126,36 @@ export function LecturerForm({
 
   useEffect(() => {
     if (lecturer) {
+      const role = lecturer.role || "Full-Time";
+      // For Part-Time, preserve existing availability or set to empty object
+      // For Full-Time and Faculty Dean, set to null (always available)
+      let availability = null;
+      if (role === "Part-Time") {
+        availability = lecturer.availability || {};
+      } else {
+        availability = null; // Full-Time and Faculty Dean are always available
+      }
+      
+      // Set default max_weekly_hours based on role if not already set
+      let defaultHours = 22; // Default for Full-Time
+      if (role === "Faculty Dean") {
+        defaultHours = 16;
+      } else if (role === "Part-Time") {
+        defaultHours = 2;
+      }
+      
       setFormData({
         id: lecturer.id || "",
         name: lecturer.name || "",
-        role: lecturer.role || "Full-Time",
+        role: role,
         faculty: lecturer.faculty || "",
         specializations: lecturer.specializations || [],
-        availability: lecturer.availability || null,
+        availability: availability,
         sessions_per_day: lecturer.sessions_per_day || 2,
-        max_weekly_hours: lecturer.max_weekly_hours || 22,
+        max_weekly_hours: lecturer.max_weekly_hours || defaultHours,
       });
     } else {
-      // Reset form for new lecturer
+      // Reset form for new lecturer (defaults to Full-Time with 22 hours)
       setFormData({
         id: "",
         name: "",
@@ -64,9 +169,54 @@ export function LecturerForm({
     }
   }, [lecturer, open]);
 
+  // Handle role change - update availability and set default max_weekly_hours
+  const handleRoleChange = (newRole) => {
+    let defaultHours = 22; // Default for Full-Time
+    if (newRole === "Faculty Dean") {
+      defaultHours = 16;
+    } else if (newRole === "Part-Time") {
+      defaultHours = 2;
+    }
+    
+    if (newRole === "Full-Time") {
+      // Full-Time: Always available (set to null)
+      setFormData({
+        ...formData,
+        role: newRole,
+        availability: null,
+        max_weekly_hours: defaultHours,
+      });
+    } else if (newRole === "Part-Time") {
+      // Part-Time: Must select availability
+      setFormData({
+        ...formData,
+        role: newRole,
+        availability: formData.availability || {},
+        max_weekly_hours: defaultHours,
+      });
+    } else if (newRole === "Faculty Dean") {
+      // Faculty Dean: Always available
+      setFormData({
+        ...formData,
+        role: newRole,
+        availability: null,
+        max_weekly_hours: defaultHours,
+      });
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    // Ensure Full-Time and Faculty Dean have availability set to null
+    const submitData = { ...formData };
+    if (submitData.role === "Full-Time" || submitData.role === "Faculty Dean") {
+      submitData.availability = null;
+    }
+    // Ensure Part-Time has availability set (even if empty object)
+    if (submitData.role === "Part-Time" && !submitData.availability) {
+      submitData.availability = {};
+    }
+    onSubmit(submitData);
   };
 
   const toggleSpecialization = (courseId) => {
@@ -79,18 +229,12 @@ export function LecturerForm({
   };
 
   const getCourseDisplay = (courseId) => {
-    const course = availableCourses.find(
-      (c) => c.id === courseId || c.code === courseId
-    );
-    return course ? `${course.code} - ${course.name}` : courseId;
+    // Return the specialization ID exactly as stored - no normalization or conversion
+    return courseId;
   };
 
-  // Filter courses by faculty if faculty is selected
-  const filteredCourses = formData.faculty
-    ? availableCourses.filter(
-        (c) => !c.faculty || c.faculty === formData.faculty
-      )
-    : availableCourses;
+  // Filter canonical groups - specializations should use subject groups, not individual subjects
+  const filteredCanonicalGroups = canonicalGroups || [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -152,9 +296,7 @@ export function LecturerForm({
                 <Label htmlFor="role">Role *</Label>
                 <Select
                   value={formData.role}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, role: value })
-                  }
+                  onValueChange={handleRoleChange}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select role" />
@@ -165,6 +307,21 @@ export function LecturerForm({
                     <SelectItem value="Part-Time">Part-Time</SelectItem>
                   </SelectContent>
                 </Select>
+                {formData.role === "Full-Time" && (
+                  <p className="text-xs text-muted-foreground">
+                    Full-Time lecturers are always available
+                  </p>
+                )}
+                {formData.role === "Faculty Dean" && (
+                  <p className="text-xs text-muted-foreground">
+                    Faculty Deans are always available (14-16 hours/week)
+                  </p>
+                )}
+                {formData.role === "Part-Time" && (
+                  <p className="text-xs text-muted-foreground">
+                    Part-Time lecturers must specify availability below
+                  </p>
+                )}
               </div>
             </div>
 
@@ -186,7 +343,7 @@ export function LecturerForm({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="max_weekly_hours">Max Weekly Hours</Label>
+                <Label htmlFor="max_weekly_hours">Max Weekly Hours *</Label>
                 <Input
                   id="max_weekly_hours"
                   type="number"
@@ -198,15 +355,19 @@ export function LecturerForm({
                       max_weekly_hours: parseInt(e.target.value) || 22,
                     })
                   }
+                  required
                 />
                 <p className="text-xs text-muted-foreground">
-                  Auto-set based on role if not specified
+                  Maximum number of teaching hours per week
                 </p>
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label>Specializations *</Label>
+              <Label>Specializations(Subject Groups) *</Label>
+              <p className="text-xs text-muted-foreground">
+                Select subject groups (not individual subjects). A subject group represents equivalent subjects across programs.
+              </p>
               <div className="space-y-2">
                 <Select
                   onValueChange={(value) => {
@@ -216,19 +377,19 @@ export function LecturerForm({
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Add course specialization" />
+                    <SelectValue placeholder="Add subject group specialization" />
                   </SelectTrigger>
                   <SelectContent>
-                    {filteredCourses
+                    {filteredCanonicalGroups
                       .filter(
-                        (c) => !formData.specializations.includes(c.id) && !formData.specializations.includes(c.code)
+                        (g) => !formData.specializations.includes(g.canonical_id)
                       )
-                      .map((course) => (
+                      .map((group) => (
                         <SelectItem
-                          key={course.id}
-                          value={course.id || course.code}
+                          key={group.canonical_id}
+                          value={group.canonical_id}
                         >
-                          {course.code} - {course.name}
+                          {group.name} ({group.canonical_id})
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -258,30 +419,31 @@ export function LecturerForm({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Availability (Optional)</Label>
-              <p className="text-xs text-muted-foreground">
-                Format: JSON object with day keys (MON, TUE, etc.) and time slot arrays (e.g., {"{"}"MON": ["09:00-11:00"]{"}"})
-              </p>
-              <Input
-                placeholder='{"MON": ["09:00-11:00"], "TUE": ["14:00-16:00"]}'
-                value={
-                  formData.availability
-                    ? JSON.stringify(formData.availability, null, 2)
-                    : ""
-                }
-                onChange={(e) => {
-                  try {
-                    const parsed = e.target.value
-                      ? JSON.parse(e.target.value)
-                      : null;
-                    setFormData({ ...formData, availability: parsed });
-                  } catch {
-                    // Invalid JSON, keep as is
+            {/* Availability Section */}
+            {formData.role === "Part-Time" ? (
+              <div className="space-y-2">
+                <Label>Availability * (Required for Part-Time)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Select days and time slots when this lecturer is available
+                </p>
+                <AvailabilitySelector
+                  availability={formData.availability || {}}
+                  onChange={(newAvailability) =>
+                    setFormData({ ...formData, availability: newAvailability })
                   }
-                }}
-              />
-            </div>
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Availability</Label>
+                <div className="p-3 bg-muted/50 rounded-md">
+                  <p className="text-sm text-muted-foreground">
+                    {formData.role === "Full-Time" && "✓ Always available (Full-Time lecturers)"}
+                    {formData.role === "Faculty Dean" && "✓ Always available (Faculty Dean)"}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button

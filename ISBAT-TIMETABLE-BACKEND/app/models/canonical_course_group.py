@@ -1,4 +1,4 @@
-"""Canonical Course Group model for database-driven course grouping."""
+"""Canonical Subject Group model for database-driven subject grouping."""
 
 from dataclasses import dataclass, field
 from typing import List, Optional
@@ -7,10 +7,10 @@ from datetime import datetime
 
 @dataclass
 class CanonicalCourseGroup:
-    """Canonical Course Group model for grouping equivalent courses"""
+    """Canonical Subject Group model for grouping equivalent subjects"""
     canonical_id: str  # Unique identifier (e.g., 'PROG_C')
     name: str  # Display name (e.g., 'Programming in C')
-    course_codes: List[str]  # List of course codes in this group (e.g., ['BIT1103', 'BCS1103'])
+    course_codes: List[str]  # List of subject codes in this group (e.g., ['BIT1103', 'BCS1103'])
     description: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

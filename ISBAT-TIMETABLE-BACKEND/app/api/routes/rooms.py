@@ -52,13 +52,13 @@ def get_rooms():
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/<room_id>', methods=['GET'])
+@bp.route('/<room_number>', methods=['GET'])
 @require_auth
-def get_room(room_id):
-    """Get specific room by ID"""
+def get_room(room_number):
+    """Get specific room by room_number"""
     try:
         db = get_db()
-        room = db.rooms.find_one({'id': room_id})
+        room = db.rooms.find_one({'room_number': room_number})
         
         if not room:
             return jsonify({'error': 'Room not found'}), 404
@@ -92,7 +92,7 @@ def create_room():
         data = request.get_json()
         
         # Validate required fields
-        required = ['id', 'room_number', 'capacity', 'room_type']
+        required = ['room_number', 'capacity', 'room_type']
         for field in required:
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
@@ -108,21 +108,27 @@ def create_room():
                 'error': f'Invalid room type. Must be one of: {", ".join(valid_types)}'
             }), 400
         
+        # Ensure specializations is always included (even if empty array)
+        if 'specializations' not in data:
+            data['specializations'] = []
+        elif data['specializations'] is None:
+            data['specializations'] = []
+        
         room = Room.from_dict(data)
         
         db = get_db()
         
-        # Check if ID already exists
-        existing = db.rooms.find_one({'id': room.id})
+        # Check if room_number already exists
+        existing = db.rooms.find_one({'room_number': room.room_number})
         if existing:
-            return jsonify({'error': 'Room ID already exists'}), 409
+            return jsonify({'error': 'Room number already exists'}), 409
         
         result = db.rooms.insert_one(room.to_dict())
         
         return jsonify({
             'success': True,
             'message': 'Room created successfully',
-            'id': room.id,
+            'room_number': room.room_number,
             '_id': str(result.inserted_id)
         }), 201
         
@@ -130,16 +136,20 @@ def create_room():
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/<room_id>', methods=['PUT'])
+@bp.route('/<room_number>', methods=['PUT'])
 @require_role('scheduler')
-def update_room(room_id):
+def update_room(room_number):
     """
     Update room
     
-    Request body: Same as create, all fields optional
+    Request body: Same as create, all fields optional (room_number cannot be changed)
     """
     try:
         data = request.get_json()
+        
+        # Prevent changing room_number
+        if 'room_number' in data and data['room_number'] != room_number:
+            return jsonify({'error': 'Cannot change room_number. Use delete and create new room instead.'}), 400
         
         # Validate capacity if provided
         if 'capacity' in data and data['capacity'] <= 0:
@@ -154,8 +164,15 @@ def update_room(room_id):
                 }), 400
         
         db = get_db()
+        
+        # Ensure specializations is always included (even if empty array)
+        if 'specializations' not in data:
+            data['specializations'] = []
+        elif data['specializations'] is None:
+            data['specializations'] = []
+        
         result = db.rooms.update_one(
-            {'id': room_id},
+            {'room_number': room_number},
             {'$set': data}
         )
         
@@ -171,13 +188,13 @@ def update_room(room_id):
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/<room_id>', methods=['DELETE'])
+@bp.route('/<room_number>', methods=['DELETE'])
 @require_role('admin')
-def delete_room(room_id):
+def delete_room(room_number):
     """Delete room (admin only)"""
     try:
         db = get_db()
-        result = db.rooms.delete_one({'id': room_id})
+        result = db.rooms.delete_one({'room_number': room_number})
         
         if result.deleted_count == 0:
             return jsonify({'error': 'Room not found'}), 404
@@ -214,7 +231,7 @@ def bulk_create_rooms():
         
         # Validate all rooms
         for idx, room_data in enumerate(rooms_data):
-            required = ['id', 'room_number', 'capacity', 'room_type']
+            required = ['room_number', 'capacity', 'room_type']
             for field in required:
                 if field not in room_data:
                     return jsonify({
@@ -224,14 +241,14 @@ def bulk_create_rooms():
         db = get_db()
         rooms = [Room.from_dict(r).to_dict() for r in rooms_data]
         
-        # Check for duplicate IDs in database
-        existing_ids = [r['id'] for r in rooms]
-        duplicates = list(db.rooms.find({'id': {'$in': existing_ids}}))
+        # Check for duplicate room_numbers in database
+        existing_numbers = [r['room_number'] for r in rooms]
+        duplicates = list(db.rooms.find({'room_number': {'$in': existing_numbers}}))
         
         if duplicates:
-            dup_ids = [d['id'] for d in duplicates]
+            dup_numbers = [d['room_number'] for d in duplicates]
             return jsonify({
-                'error': f'Duplicate room IDs found: {", ".join(dup_ids)}'
+                'error': f'Duplicate room numbers found: {", ".join(dup_numbers)}'
             }), 409
         
         result = db.rooms.insert_many(rooms)

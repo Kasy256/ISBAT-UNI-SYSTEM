@@ -50,20 +50,20 @@ class FitnessBreakdown:
 class FitnessEvaluator:
     """Evaluates fitness of timetable chromosomes"""
     
-    def __init__(self, course_units: Dict = None, student_groups: Dict = None,
+    def __init__(self, course_units: Dict = None, programs: Dict = None,
                  lecturers: Dict = None, rooms: Dict = None, config: Dict[str, float] = None):
         """
         Initialize fitness evaluator
         
         Args:
             course_units: Dictionary of course units by ID
-            student_groups: Dictionary of student groups by ID
+            programs: Dictionary of programs by ID
             lecturers: Dictionary of lecturers by ID
             rooms: Dictionary of rooms by ID
             config: Fitness weights configuration
         """
         self.course_units = course_units or {}
-        self.student_groups = student_groups or {}
+        self.programs = programs or {}
         self.lecturers = lecturers or {}
         self.rooms = rooms or {}
         
@@ -95,7 +95,7 @@ class FitnessEvaluator:
                 time_slot_dict = gene.time_slot.to_dict() if hasattr(gene.time_slot, 'to_dict') else gene.time_slot
                 sessions.append({
                     'id': gene.session_id,
-                    'student_group_id': gene.student_group_id,
+                    'program_id': gene.program_id,
                     'course_unit_id': gene.course_unit_id,
                     'lecturer_id': gene.lecturer_id,
                     'room_id': gene.room_id,
@@ -105,14 +105,14 @@ class FitnessEvaluator:
                 })
             chromosome_dict = {
                 'sessions': sessions,
-                'student_groups': {gid: self._group_to_dict(g) for gid, g in self.student_groups.items()},
+                'programs': {gid: self._group_to_dict(g) for gid, g in self.programs.items()},
                 'course_units': {cid: self._course_to_dict(c) for cid, c in self.course_units.items()}
             }
         else:
             # Already a dict
             chromosome_dict = chromosome if 'sessions' in chromosome else {'sessions': []}
-            if 'student_groups' not in chromosome_dict:
-                chromosome_dict['student_groups'] = {gid: self._group_to_dict(g) for gid, g in self.student_groups.items()}
+            if 'programs' not in chromosome_dict:
+                chromosome_dict['programs'] = {gid: self._group_to_dict(g) for gid, g in self.programs.items()}
             if 'course_units' not in chromosome_dict:
                 chromosome_dict['course_units'] = {cid: self._course_to_dict(c) for cid, c in self.course_units.items()}
         
@@ -158,10 +158,10 @@ class FitnessEvaluator:
         """
         sessions = chromosome.get('sessions', [])
         
-        # Group sessions by student group and day
+        # Group sessions by program and day
         student_schedules = {}
         for session in sessions:
-            group_id = session.get('student_group_id', '')
+            group_id = session.get('program_id', '')
             day = session.get('time_slot', {}).get('day', '')
             
             if group_id not in student_schedules:
@@ -241,21 +241,21 @@ class FitnessEvaluator:
         Higher score = better time slot distribution (better)
         """
         sessions = chromosome.get('sessions', [])
-        student_groups = chromosome.get('student_groups', {})
+        programs = chromosome.get('programs', {})
         
         total_score = 0.0
         total_groups = 0
         
-        # Group sessions by student group
+        # Group sessions by program
         group_sessions = {}
         for session in sessions:
-            group_id = session.get('student_group_id', '')
+            group_id = session.get('program_id', '')
             if group_id not in group_sessions:
                 group_sessions[group_id] = []
             group_sessions[group_id].append(session)
         
         for group_id, group_sess in group_sessions.items():
-            group_info = student_groups.get(group_id, {})
+            group_info = programs.get(group_id, {})
             semester = group_info.get('semester', '')
             is_s1 = 'S1' in semester
             
@@ -348,6 +348,71 @@ class FitnessEvaluator:
         
         return total_balance_score / max(len(lecturer_schedules), 1)
     
+    def _check_room_specialization_match(self, room: Dict[str, Any], course_unit: Dict[str, Any]) -> bool:
+        """Check if room specializations match course unit requirements
+        
+        Returns True if specializations match, False otherwise.
+        Used for prioritization scoring.
+        """
+        if not room or not course_unit:
+            return False
+        
+        room_specializations = room.get('specializations', []) or []
+        
+        # If room has no specializations, consider it a match (general-purpose room)
+        if not room_specializations:
+            return True
+        
+        # Get course group to determine required specializations
+        course_group_id = course_unit.get('course_group', None)
+        if not course_group_id:
+            # No course group - use fallback logic
+            required_room_type = course_unit.get('preferred_room_type', 'Theory')
+            if required_room_type == 'Theory':
+                return 'Theory' in room_specializations or len(room_specializations) == 0
+            else:
+                # Lab courses without course group: default to ICT-related specializations
+                ict_specs = ['ICT', 'Programming', 'ICT & Programming']
+                for spec in ict_specs:
+                    if spec in room_specializations:
+                        return True
+                    for room_spec in room_specializations:
+                        if spec in room_spec:
+                            return True
+                return False
+        
+        # Get canonical group name (simplified - would need domain manager access for full logic)
+        # For now, use keyword matching similar to domain manager
+        course_name = course_unit.get('name', '').lower() or course_unit.get('id', '').lower()
+        
+        # Map course name to required specializations
+        matching_specs = []
+        if any(kw in course_name for kw in ['programming', 'prog', 'code', 'software', 'java', 'python', 'c++', 'c#', 'web', 'asp', 'mobile']):
+            matching_specs.extend(['Programming', 'ICT', 'ICT & Programming'])
+        if any(kw in course_name for kw in ['linux']):
+            matching_specs.append('LINUX')
+        if any(kw in course_name for kw in ['network', 'cyber', 'security', 'admin', 'iot']):
+            matching_specs.append('Networking & Cyber Security')
+        if any(kw in course_name for kw in ['multimedia', 'graphics', 'design', 'animation']):
+            matching_specs.append('Multimedia')
+        if any(kw in course_name for kw in ['artificial intelligence', 'machine learning', 'ai', 'ml', 'data science']):
+            matching_specs.append('AI & ML')
+        
+        # Check if room has any matching specialization
+        for spec in matching_specs:
+            if spec in room_specializations:
+                return True
+            for room_spec in room_specializations:
+                if spec in room_spec:
+                    return True
+        
+        # Check Theory fallback
+        required_room_type = course_unit.get('preferred_room_type', 'Theory')
+        if required_room_type == 'Theory' and 'Theory' in room_specializations:
+            return True
+        
+        return False
+    
     def _evaluate_room_utilization(self, chromosome: Dict[str, Any],
                                    breakdown: FitnessBreakdown) -> float:
         """
@@ -357,6 +422,7 @@ class FitnessEvaluator:
         """
         sessions = chromosome.get('sessions', [])
         rooms_data = chromosome.get('rooms', {})
+        course_units_data = chromosome.get('course_units', {})
         
         # Group sessions by room
         room_usage = {}
@@ -368,6 +434,8 @@ class FitnessEvaluator:
         
         total_utilization_score = 0.0
         total_occupancy = 0.0
+        specialization_matches = 0
+        total_sessions = 0
         
         for room_id, room_sessions in room_usage.items():
             room = rooms_data.get(room_id, {})
@@ -388,14 +456,22 @@ class FitnessEvaluator:
             elif occupancy_rate > 0.8:
                 utilization_score = 1.0 - 0.3 * (occupancy_rate - 0.8) / 0.2
             
-            # Calculate capacity efficiency
+            # Calculate capacity efficiency and specialization matching
             for session in room_sessions:
-                group_size = session.get('student_group_size', 0)
+                group_size = session.get('program_size', 0)
                 waste_ratio = (room_capacity - group_size) / room_capacity if room_capacity > 0 else 0
                 
                 if waste_ratio > 0.5:  # Room more than 50% oversized
                     utilization_score *= 0.85
                     breakdown.room_waste += waste_ratio
+                
+                # Check specialization matching (bonus for matching specializations)
+                course_unit_id = session.get('course_unit_id', '')
+                course_unit = course_units_data.get(course_unit_id, {})
+                if self._check_room_specialization_match(room, course_unit):
+                    specialization_matches += 1
+                    utilization_score *= 1.05  # 5% bonus for matching specializations
+                total_sessions += 1
             
             total_utilization_score += utilization_score
         
@@ -403,7 +479,14 @@ class FitnessEvaluator:
         if room_usage:
             breakdown.avg_room_occupancy = total_occupancy / len(room_usage)
         
-        return total_utilization_score / max(len(room_usage), 1)
+        # Add overall specialization match bonus
+        specialization_bonus = 0.0
+        if total_sessions > 0:
+            match_rate = specialization_matches / total_sessions
+            specialization_bonus = match_rate * 0.1  # Up to 10% bonus for high match rate
+        
+        base_score = total_utilization_score / max(len(room_usage), 1)
+        return min(1.0, base_score + specialization_bonus)  # Cap at 1.0
     
     def _evaluate_weekday_distribution(self, chromosome: Dict[str, Any],
                                        breakdown: FitnessBreakdown) -> float:
@@ -486,14 +569,14 @@ class FitnessEvaluator:
         
         for gene in chromosome.genes:
             # Get additional data from resources
-            student_group = self.student_groups.get(gene.student_group_id, {})
+            program = self.programs.get(gene.program_id, {})
             course_unit = self.course_units.get(gene.course_unit_id, {})
             
             # Handle both dict and object formats
-            if hasattr(student_group, 'size'):
-                group_size = student_group.size
+            if hasattr(program, 'size'):
+                group_size = program.size
             else:
-                group_size = student_group.get('size', 0) if isinstance(student_group, dict) else 0
+                group_size = program.get('size', 0) if isinstance(program, dict) else 0
             
             if hasattr(course_unit, 'preferred_room_type'):
                 preferred_room_type = course_unit.preferred_room_type
@@ -503,13 +586,13 @@ class FitnessEvaluator:
             session = {
                 'session_id': gene.session_id,
                 'course_unit_id': gene.course_unit_id,
-                'student_group_id': gene.student_group_id,
+                'program_id': gene.program_id,
                 'lecturer_id': gene.lecturer_id,
                 'room_id': gene.room_id,
                 'time_slot': gene.time_slot,
                 'term': gene.term,
                 'session_number': gene.session_number,
-                'student_group_size': group_size,
+                'program_size': group_size,
                 'course_preferred_room_type': preferred_room_type
             }
             sessions.append(session)
@@ -519,7 +602,7 @@ class FitnessEvaluator:
             'rooms': self.rooms,
             'lecturers': self.lecturers,
             'course_units': self.course_units,
-            'student_groups': self.student_groups
+            'programs': self.programs
         }
     
     def _evaluate_violations(self, chromosome) -> Tuple[float, int]:
@@ -537,7 +620,7 @@ class FitnessEvaluator:
         context.lecturers = {lid: self._lecturer_to_dict(l) for lid, l in self.lecturers.items()}
         context.rooms = {rid: self._room_to_dict(r) for rid, r in self.rooms.items()}
         context.course_units = {cid: self._course_to_dict(c) for cid, c in self.course_units.items()}
-        context.student_groups = {gid: self._group_to_dict(g) for gid, g in self.student_groups.items()}
+        context.programs = {gid: self._group_to_dict(g) for gid, g in self.programs.items()}
         
         constraint_checker = ConstraintChecker()
         total_violations = 0
@@ -597,20 +680,20 @@ class FitnessEvaluator:
                 'room_type': getattr(room, 'room_type', 'Theory')
             }
     
-    def _course_to_dict(self, course) -> dict:
-        """Convert course to dict for constraint context"""
-        if hasattr(course, 'to_dict'):
-            return course.to_dict()
-        elif isinstance(course, dict):
-            return course
+    def _course_to_dict(self, subject) -> dict:
+        """Convert subject to dict for constraint context"""
+        if hasattr(subject, 'to_dict'):
+            return subject.to_dict()
+        elif isinstance(subject, dict):
+            return subject
         else:
             return {
-                'id': getattr(course, 'id', ''),
-                'preferred_room_type': getattr(course, 'preferred_room_type', 'Theory')
+                'id': getattr(subject, 'id', ''),
+                'preferred_room_type': getattr(subject, 'preferred_room_type', 'Theory')
             }
     
     def _group_to_dict(self, group) -> dict:
-        """Convert student group to dict for constraint context"""
+        """Convert program to dict for constraint context"""
         if hasattr(group, 'to_dict'):
             return group.to_dict()
         elif isinstance(group, dict):
@@ -632,7 +715,7 @@ class FitnessEvaluator:
 
 
 def evaluate_chromosome(chromosome, course_units: Dict = None, 
-                       student_groups: Dict = None, lecturers: Dict = None,
+                       programs: Dict = None, lecturers: Dict = None,
                        rooms: Dict = None, config: Dict[str, float] = None) -> FitnessScore:
     """
     Convenience function to evaluate chromosome fitness
@@ -640,7 +723,7 @@ def evaluate_chromosome(chromosome, course_units: Dict = None,
     Args:
         chromosome: Timetable chromosome
         course_units: Dictionary of course units
-        student_groups: Dictionary of student groups
+        programs: Dictionary of programs
         lecturers: Dictionary of lecturers
         rooms: Dictionary of rooms
         config: Optional fitness weights configuration
@@ -648,7 +731,7 @@ def evaluate_chromosome(chromosome, course_units: Dict = None,
     Returns:
         FitnessScore with overall and component scores
     """
-    evaluator = FitnessEvaluator(course_units, student_groups, lecturers, rooms, config)
+    evaluator = FitnessEvaluator(course_units, programs, lecturers, rooms, config)
     return evaluator.evaluate(chromosome)
 
 

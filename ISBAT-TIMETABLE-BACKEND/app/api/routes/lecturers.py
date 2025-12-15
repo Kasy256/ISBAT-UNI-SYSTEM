@@ -1,7 +1,9 @@
 ﻿from flask import Blueprint, request, jsonify
 from app import get_db
 from app.models.lecturer import Lecturer
+from app.middleware.auth import require_auth
 from bson import ObjectId
+import traceback
 
 bp = Blueprint('lecturers', __name__, url_prefix='/api/lecturers')
 

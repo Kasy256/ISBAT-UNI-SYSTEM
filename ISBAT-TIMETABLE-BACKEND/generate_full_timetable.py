@@ -1,6 +1,6 @@
 """
 Generate Complete University Timetable
-Generates timetables for ALL student groups across all semesters and terms
+Generates timetables for ALL programs across all semesters and terms
 """
 
 import sys
@@ -12,9 +12,9 @@ import csv
 from collections import defaultdict
 
 from app.models.lecturer import Lecturer
-from app.models.course import CourseUnit
+from app.models.subject import CourseUnit
 from app.models.room import Room
-from app.models.student import StudentGroup
+from app.models.program import Program
 from app.services.preprocessing.term_splitter import TermSplitter
 from app.services.csp.csp_engine import CSPEngine
 from app.services.gga.gga_engine import GGAEngine
@@ -37,13 +37,13 @@ def fetch_all_data(db):
     """Fetch all data from database"""
     print("\n📥 Loading university data...")
     
-    # Load all student groups
-    student_groups_data = list(db.student_groups.find({'is_active': True}))
-    student_groups = [StudentGroup.from_dict(sg) for sg in student_groups_data]
+    # Load all programs
+    programs_data = list(db.programs.find({'is_active': True}))
+    programs = [Program.from_dict(sg) for sg in programs_data]
     
-    # Load all courses
+    # Load all subjects
     courses_data = list(db.course_units.find())
-    courses = {CourseUnit.from_dict(c).id: CourseUnit.from_dict(c) for c in courses_data}
+    subjects = {CourseUnit.from_dict(c).id: CourseUnit.from_dict(c) for c in courses_data}
     
     # Load all lecturers
     lecturers_data = list(db.lecturers.find())
@@ -53,62 +53,66 @@ def fetch_all_data(db):
     rooms_data = list(db.rooms.find())
     rooms = {Room.from_dict(r).id: Room.from_dict(r) for r in rooms_data}
     
-    print(f"   ✅ {len(student_groups)} student groups")
-    print(f"   ✅ {len(courses)} courses")
+    print(f"   ✅ {len(programs)} programs")
+    print(f"   ✅ {len(subjects)} subjects")
     print(f"   ✅ {len(lecturers)} lecturers")
     print(f"   ✅ {len(rooms)} rooms")
     
-    return student_groups, courses, lecturers, rooms
+    return programs, subjects, lecturers, rooms
 
-def generate_timetable_for_group(student_group, courses, lecturers, rooms, all_assignments):
-    """Generate timetable for a single student group"""
+def generate_timetable_for_group(program, subjects, lecturers, rooms, all_assignments):
+    """Generate timetable for a single program"""
     
     print(f"\n{'─'*70}")
-    print(f"📚 Generating: {student_group.display_name}")
-    print(f"   Students: {student_group.size} | Courses: {len(student_group.course_units)}")
+    print(f"📚 Generating: {program.display_name}")
+    print(f"   Students: {program.size} | Subjects: {len(program.course_units)}")
     
-    # Get courses for this group
+    # Get subjects for this group
     # Handle both dict format (from database) and string format (from model)
     course_ids = []
-    for cu in student_group.course_units:
+    for cu in program.course_units:
         if isinstance(cu, dict):
-            # Extract code from dict (code is the same as course id)
-            course_id = cu.get('code')
+            # Extract code from dict (code is the same as subject id)
+            course_id = cu.get('code') or cu.get('id')
             if course_id:
-                course_ids.append(course_id)
+                course_ids.append(course_id.strip())
         elif isinstance(cu, str):
-            # Already a string ID
-            course_ids.append(cu)
+            # Extract code from "CODE - Name" format
+            if " - " in cu:
+                course_code = cu.split(" - ")[0].strip()
+                course_ids.append(course_code)
+            else:
+                course_ids.append(cu.strip())
     
-    group_courses = [courses[cu_id] for cu_id in course_ids if cu_id in courses]
+    group_courses = [subjects[cu_id] for cu_id in course_ids if cu_id in subjects]
     
     if not group_courses:
-        print("   ⚠️  No courses assigned - skipping")
+        print("   ⚠️  No subjects assigned - skipping")
         return []
     
     # Step 1: Term splitting
     term_splitter = TermSplitter()
     try:
         term1_plan, term2_plan = term_splitter.split_semester(
-            student_group.semester, 
+            program.semester, 
             group_courses,
-            program=student_group.program
+            program=program.program
         )
     except ValueError as e:
-        # If not enough courses for proper split, put all in Term1
-        print(f"   ⚠️  Cannot split {len(group_courses)} courses - using all in Term1")
+        # If not enough subjects for proper split, put all in Term1
+        print(f"   ⚠️  Cannot split {len(group_courses)} subjects - using all in Term1")
         from app.services.preprocessing.term_splitter import TermPlan
         term1_plan = TermPlan(
-            term_id=f"{student_group.semester}_Term1",
-            semester=student_group.semester,
+            term_id=f"{program.semester}_Term1",
+            semester=program.semester,
             term_number=1,
             assigned_units=group_courses,
             total_weekly_hours=sum(c.weekly_hours for c in group_courses),
             total_credits=sum(c.credits for c in group_courses)
         )
         term2_plan = TermPlan(
-            term_id=f"{student_group.semester}_Term2",
-            semester=student_group.semester,
+            term_id=f"{program.semester}_Term2",
+            semester=program.semester,
             term_number=2,
             assigned_units=[],
             total_weekly_hours=0,
@@ -128,11 +132,11 @@ def generate_timetable_for_group(student_group, courses, lecturers, rooms, all_a
         if not term_courses:
             continue
         
-        print(f"   📅 {term}: {len(term_courses)} courses")
+        print(f"   📅 {term}: {len(term_courses)} subjects")
         
-        # Create term-specific student group
-        term_student_group = StudentGroup.from_dict({
-            **student_group.to_dict(),
+        # Create term-specific program
+        term_program = Program.from_dict({
+            **program.to_dict(),
             'term': term,
             'course_units': [c.id for c in term_courses]
         })
@@ -143,7 +147,7 @@ def generate_timetable_for_group(student_group, courses, lecturers, rooms, all_a
             lecturers=list(lecturers.values()),
             rooms=list(rooms.values()),
             course_units=term_courses,
-            student_groups=[term_student_group]
+            programs=[term_program]
         )
         
         try:
@@ -160,21 +164,21 @@ def generate_timetable_for_group(student_group, courses, lecturers, rooms, all_a
                 gene = Gene(
                     session_id=assignment.variable_id,
                     course_unit_id=assignment.course_unit_id,
-                    student_group_id=assignment.student_group_id,
+                    program_id=assignment.program_id,
                     lecturer_id=assignment.lecturer_id,
-                    room_id=assignment.room_id,
+                    room_id=assignment.room_number,
                     time_slot=assignment.time_slot,
                     term=assignment.term,
                     session_number=assignment.session_number
                 )
                 genes.append(gene)
             
-            csp_chromosome = Chromosome(id=f'CSP_{student_group.id}_{term}', genes=genes)
+            csp_chromosome = Chromosome(id=f'CSP_{program.id}_{term}', genes=genes)
             
             # Step 3: GGA - Optimize soft constraints
             gga_engine = GGAEngine(
                 course_units={c.id: c for c in term_courses},
-                student_groups={student_group.id: student_group},
+                programs={program.id: program},
                 lecturers=lecturers,
                 rooms=rooms
             )
@@ -187,11 +191,11 @@ def generate_timetable_for_group(student_group, courses, lecturers, rooms, all_a
             for gene in optimized_chromosome.genes:
                 group_assignments.append({
                     'session_id': gene.session_id,
-                    'student_group_id': gene.student_group_id,
-                    'student_group_name': student_group.display_name,
-                    'semester': student_group.semester,
+                    'program_id': gene.program_id,
+                    'program_name': program.display_name,
+                    'semester': program.semester,
                     'term': term,
-                    'group_size': student_group.size,
+                    'group_size': program.size,
                     'course_id': gene.course_unit_id,
                     'lecturer_id': gene.lecturer_id,
                     'room_id': gene.room_id,
@@ -208,7 +212,7 @@ def generate_timetable_for_group(student_group, courses, lecturers, rooms, all_a
     
     return group_assignments
 
-def export_full_timetable(all_assignments, courses, lecturers, rooms, filename='FULL_UNIVERSITY_TIMETABLE.csv'):
+def export_full_timetable(all_assignments, subjects, lecturers, rooms, filename='FULL_UNIVERSITY_TIMETABLE.csv'):
     """Export complete university timetable to CSV"""
     
     print(f"\n{'='*70}")
@@ -220,7 +224,7 @@ def export_full_timetable(all_assignments, courses, lecturers, rooms, filename='
         "Course_Code", "Course_Name", "Course_Type", "Credits",
         "Lecturer_ID", "Lecturer_Name", "Lecturer_Role",
         "Room_Number", "Room_Type", "Room_Capacity", "Room_Building", "Room_Campus",
-        "Student_Group", "Semester", "Term", "Group_Size"
+        "Program", "Semester", "Term", "Student_Size"
     ]
     
     with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
@@ -228,11 +232,11 @@ def export_full_timetable(all_assignments, courses, lecturers, rooms, filename='
         writer.writeheader()
         
         for assignment in all_assignments:
-            course = courses.get(assignment['course_id'], None)
+            subject = subjects.get(assignment['course_id'], None)
             lecturer = lecturers.get(assignment['lecturer_id'], None)
             room = rooms.get(assignment['room_id'], None)
             
-            if not course or not lecturer or not room:
+            if not subject or not lecturer or not room:
                 continue
             
             ts = assignment['time_slot']
@@ -243,10 +247,10 @@ def export_full_timetable(all_assignments, courses, lecturers, rooms, filename='
                 "Time_Slot": f"{ts['start']}-{ts['end']}",
                 "Start_Time": ts['start'],
                 "End_Time": ts['end'],
-                "Course_Code": course.code,
-                "Course_Name": course.name,
-                "Course_Type": course.preferred_room_type,
-                "Credits": course.credits,
+                "Course_Code": subject.code,
+                "Course_Name": subject.name,
+                "Course_Type": subject.preferred_room_type,
+                "Credits": subject.credits,
                 "Lecturer_ID": lecturer.id,
                 "Lecturer_Name": lecturer.name,
                 "Lecturer_Role": lecturer.role,
@@ -255,10 +259,10 @@ def export_full_timetable(all_assignments, courses, lecturers, rooms, filename='
                 "Room_Capacity": room.capacity,
                 "Room_Building": room.building,
                 "Room_Campus": getattr(room, 'campus', 'N/A'),
-                "Student_Group": assignment['student_group_name'],
+                "Program": assignment['program_name'],
                 "Semester": assignment['semester'],
                 "Term": assignment['term'],
-                "Group_Size": assignment['group_size']
+                "Student_Size": assignment['group_size']
             }
             writer.writerow(row)
     
@@ -266,9 +270,9 @@ def export_full_timetable(all_assignments, courses, lecturers, rooms, filename='
     print(f"📁 File: {filename}")
     
     # Generate statistics
-    generate_statistics(all_assignments, courses, lecturers, rooms, filename)
+    generate_statistics(all_assignments, subjects, lecturers, rooms, filename)
 
-def generate_statistics(all_assignments, courses, lecturers, rooms, csv_filename):
+def generate_statistics(all_assignments, subjects, lecturers, rooms, csv_filename):
     """Generate comprehensive statistics"""
     
     # Group by various dimensions
@@ -310,13 +314,13 @@ def generate_statistics(all_assignments, courses, lecturers, rooms, csv_filename
             f.write(f"  {day}: {count} sessions\n")
         
         f.write("\n" + "="*70 + "\n")
-        f.write("TOP 10 COURSES (by sessions)\n")
+        f.write("TOP 10 SUBJECTS (by sessions)\n")
         f.write("="*70 + "\n")
         top_courses = sorted(by_course.items(), key=lambda x: x[1], reverse=True)[:10]
         for course_id, count in top_courses:
-            course = courses.get(course_id)
-            if course:
-                f.write(f"  {course.code} - {course.name}: {count} sessions\n")
+            subject = subjects.get(course_id)
+            if subject:
+                f.write(f"  {subject.code} - {subject.name}: {count} sessions\n")
         
         f.write("\n" + "="*70 + "\n")
         f.write("TOP 10 LECTURERS (by sessions)\n")
@@ -349,25 +353,25 @@ def main():
         client, db = setup_database()
         
         # Load all data
-        student_groups, courses, lecturers, rooms = fetch_all_data(db)
+        programs, subjects, lecturers, rooms = fetch_all_data(db)
         
-        print(f"\n🎯 Generating timetable for all student groups")
-        print(f"   Student Groups: {len(student_groups)}")
-        print(f"   Semesters: {len(set(sg.semester for sg in student_groups))}")
+        print(f"\n🎯 Generating timetable for all programs")
+        print(f"   Programs: {len(programs)}")
+        print(f"   Semesters: {len(set(sg.semester for sg in programs))}")
         
         # Generate timetables for all groups
         all_assignments = []
         
-        for i, student_group in enumerate(student_groups, 1):
-            print(f"\n[{i}/{len(student_groups)}] Processing...")
+        for i, program in enumerate(programs, 1):
+            print(f"\n[{i}/{len(programs)}] Processing...")
             group_assignments = generate_timetable_for_group(
-                student_group, courses, lecturers, rooms, all_assignments
+                program, subjects, lecturers, rooms, all_assignments
             )
             all_assignments.extend(group_assignments)
         
         # Export complete timetable
         if all_assignments:
-            export_full_timetable(all_assignments, courses, lecturers, rooms,
+            export_full_timetable(all_assignments, subjects, lecturers, rooms,
                                 filename='TIMETABLE_UNIVERSITY_COMPLETE.csv')
         else:
             print("\n❌ No assignments generated!")
@@ -383,7 +387,7 @@ def main():
         print("="*70)
         print(f"\n📊 Statistics:")
         print(f"   • Total Sessions: {len(all_assignments)}")
-        print(f"   • Student Groups: {len(student_groups)}")
+        print(f"   • Programs: {len(programs)}")
         print(f"   • Time Elapsed: {elapsed:.2f} seconds")
         print(f"\n📁 Output Files:")
         print(f"   • TIMETABLE_UNIVERSITY_COMPLETE.csv")

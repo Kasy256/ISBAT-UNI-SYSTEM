@@ -12,16 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { timetableAPI } from "@/lib/api";
+import { timetableAPI, timeSlotsAPI } from "@/lib/api";
 import { toast } from "sonner";
-
-// Time slots mapping based on backend
-const TIME_SLOTS = [
-  { period: "SLOT_1", start: "09:00", end: "11:00", display: "09:00 AM - 11:00 AM" },
-  { period: "SLOT_2", start: "11:00", end: "13:00", display: "11:00 AM - 01:00 PM" },
-  { period: "SLOT_3", start: "14:00", end: "16:00", display: "02:00 PM - 04:00 PM" },
-  { period: "SLOT_4", start: "16:00", end: "18:00", display: "04:00 PM - 06:00 PM" },
-];
 
 const DAYS = ["MON", "TUE", "WED", "THU", "FRI"];
 const DAY_NAMES = {
@@ -32,7 +24,7 @@ const DAY_NAMES = {
   FRI: "Friday",
 };
 
-// Color palette for course groups
+// Color palette for subject groups
 const COURSE_GROUP_COLORS = [
   { bg: 'bg-blue-100 dark:bg-blue-900/30', border: 'border-blue-300 dark:border-blue-700', text: 'text-blue-800 dark:text-blue-200' },
   { bg: 'bg-green-100 dark:bg-green-900/30', border: 'border-green-300 dark:border-green-700', text: 'text-green-800 dark:text-green-200' },
@@ -44,11 +36,14 @@ const COURSE_GROUP_COLORS = [
   { bg: 'bg-indigo-100 dark:bg-indigo-900/30', border: 'border-indigo-300 dark:border-indigo-700', text: 'text-indigo-800 dark:text-indigo-200' },
 ];
 
-// Get color for a course code (deterministic based on code)
-const getCourseColor = (courseCode) => {
-  if (!courseCode) return COURSE_GROUP_COLORS[0];
-  // Use course code to deterministically assign color
-  const hash = courseCode.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+// Get color for a subject (deterministic based on subject name)
+// This ensures the same subject has the same color across all groups/programs
+const getCourseColor = (subjectName) => {
+  if (!subjectName) return COURSE_GROUP_COLORS[0];
+  // Use subject name to deterministically assign color
+  // Normalize the name (trim, lowercase) for consistent hashing
+  const normalizedName = subjectName.trim().toLowerCase();
+  const hash = normalizedName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
   return COURSE_GROUP_COLORS[hash % COURSE_GROUP_COLORS.length];
 };
 
@@ -61,6 +56,30 @@ export default function Timetable() {
   const [selectedCourse, setSelectedCourse] = useState("all");
   const [selectedProgram, setSelectedProgram] = useState("all");
   const [selectedSemester, setSelectedSemester] = useState("all");
+  const [selectedFaculty, setSelectedFaculty] = useState("all");
+
+  // Fetch time slots from API
+  const { data: timeSlotsData } = useQuery({
+    queryKey: ['time-slots'],
+    queryFn: async () => {
+      const response = await timeSlotsAPI.getAll();
+      return response.time_slots || [];
+    },
+  });
+
+  // Format time slots for display
+  const TIME_SLOTS = React.useMemo(() => {
+    if (timeSlotsData && timeSlotsData.length > 0) {
+      return timeSlotsData.map(slot => ({
+        period: slot.period,
+        start: slot.start,
+        end: slot.end,
+        display: slot.display_name || `${slot.start} - ${slot.end}`
+      }));
+    }
+    // Return empty array if no time slots (should not happen if database is seeded)
+    return [];
+  }, [timeSlotsData]);
 
   // Fetch timetable data
   const { data, isLoading, error } = useQuery({
@@ -94,10 +113,11 @@ export default function Timetable() {
   }, [timetableData]);
 
   // Extract all unique values for filters
-  const { courses, programs, semesters } = useMemo(() => {
+  const { subjects, programs, semesters, faculties } = useMemo(() => {
     const courseMap = new Map(); // Map code to {code, name}
     const programSet = new Set();
     const semesterSet = new Set();
+    const facultySet = new Set();
 
     Object.entries(timetableData).forEach(([groupId, groupSessions]) => {
       if (Array.isArray(groupSessions)) {
@@ -120,6 +140,9 @@ export default function Timetable() {
               semesterSet.add(`S${sem}`);
             }
           }
+          if (session?.lecturer?.faculty) {
+            facultySet.add(session.lecturer.faculty);
+          }
         });
       }
     });
@@ -127,16 +150,18 @@ export default function Timetable() {
     // Debug: Log extracted values
     const extractedPrograms = Array.from(programSet);
     const extractedSemesters = Array.from(semesterSet);
+    const extractedFaculties = Array.from(facultySet);
     
     console.log('Extracted filters:', {
-      courses: Array.from(courseMap.values()).length,
+      subjects: Array.from(courseMap.values()).length,
       programs: extractedPrograms,
       semesters: extractedSemesters,
+      faculties: extractedFaculties,
       sampleSession: Object.values(timetableData)[0]?.[0]
     });
 
     return {
-      courses: Array.from(courseMap.values()).sort((a, b) => a.code.localeCompare(b.code)),
+      subjects: Array.from(courseMap.values()).sort((a, b) => a.code.localeCompare(b.code)),
       programs: extractedPrograms.length > 0 ? extractedPrograms.sort() : ['BIT', 'BCS'], // Fallback if empty
       semesters: extractedSemesters.length > 0 ? extractedSemesters.sort((a, b) => {
         // Sort S1, S2, S3... numerically
@@ -144,6 +169,7 @@ export default function Timetable() {
         const numB = parseInt(b.replace(/^S/i, ''));
         return numA - numB;
       }) : ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'], // Fallback if empty
+      faculties: extractedFaculties.length > 0 ? extractedFaculties.sort() : [],
     };
   }, [timetableData]);
 
@@ -164,16 +190,19 @@ export default function Timetable() {
         if (selectedSemester !== "all" && session.semester !== selectedSemester) {
           return;
         }
+        if (selectedFaculty !== "all" && session.lecturer?.faculty !== selectedFaculty) {
+          return;
+        }
 
         allSessions.push({
           ...session,
-          student_group_id: groupId,
+          program_id: groupId,
         });
       });
     });
 
     return allSessions;
-  }, [timetableData, selectedCourse, selectedProgram, selectedSemester]);
+  }, [timetableData, selectedCourse, selectedProgram, selectedSemester, selectedFaculty]);
 
   // Organize sessions by day and time slot
   const organizedSessions = useMemo(() => {
@@ -219,7 +248,7 @@ export default function Timetable() {
             period: timeSlot.period,
             start: timeSlot.start,
             end: timeSlot.end,
-            course: session.course_unit?.code
+            subject: session.course_unit?.code
           });
         }
       }
@@ -241,7 +270,7 @@ export default function Timetable() {
           "Course_Code", "Course_Name", "Course_Type", "Credits",
           "Lecturer_ID", "Lecturer_Name", "Lecturer_Role",
           "Room_Number", "Room_Type", "Room_Capacity", "Room_Campus",
-          "Student_Group", "Semester", "Term", "Group_Size"
+          "Program", "Semester", "Term", "Student_Size"
         ];
         
         const rows = sessions.map(session => [
@@ -261,10 +290,10 @@ export default function Timetable() {
           session.room?.type || '',
           session.room?.capacity || 0,
           session.room?.campus || 'N/A',
-          session.student_group_name || session.student_group_id || '',
+          session.program_name || session.program_id || '',
           session.semester || '',
           session.term || '',
-          session.group_size || 0
+          session.group_size || session.student_size || 0
         ]);
         
         // Convert to CSV (no quotes around values, matching Python script output)
@@ -405,18 +434,18 @@ export default function Timetable() {
 
       {/* Filters */}
       <Card className="glass-card p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Course Unit</label>
             <Select value={selectedCourse} onValueChange={setSelectedCourse}>
               <SelectTrigger>
-                <SelectValue placeholder="All Courses" />
+                <SelectValue placeholder="All Subjects" />
             </SelectTrigger>
             <SelectContent>
-                <SelectItem value="all">All Courses</SelectItem>
-                {courses.map((course) => (
-                  <SelectItem key={course.code} value={course.code}>
-                    {course.code} - {course.name}
+                <SelectItem value="all">All Subjects</SelectItem>
+                {subjects.map((subject) => (
+                  <SelectItem key={subject.code} value={subject.code}>
+                    {subject.code} - {subject.name}
                   </SelectItem>
                 ))}
             </SelectContent>
@@ -449,6 +478,22 @@ export default function Timetable() {
                 {semesters.map((semester) => (
                   <SelectItem key={semester} value={semester}>
                     {semester}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Faculty</label>
+            <Select value={selectedFaculty} onValueChange={setSelectedFaculty}>
+              <SelectTrigger>
+                <SelectValue placeholder="All Faculties" />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="all">All Faculties</SelectItem>
+                {faculties.map((faculty) => (
+                  <SelectItem key={faculty} value={faculty}>
+                    {faculty}
                   </SelectItem>
                 ))}
             </SelectContent>
@@ -492,8 +537,9 @@ export default function Timetable() {
                         <div className="space-y-2">
                           {slotSessions.map((session, idx) => {
                             const courseCode = session.course_unit?.code || "N/A";
-                            const colorScheme = getCourseColor(courseCode);
-                            const sessionKey = session.session_id || `${session.course_unit?.id || 'unknown'}-${session.student_group_id || 'unknown'}-${day}-${slot.period}-${idx}`;
+                            const subjectName = session.course_unit?.name || "Unknown Subject";
+                            const colorScheme = getCourseColor(subjectName);
+                            const sessionKey = session.session_id || `${session.course_unit?.id || 'unknown'}-${session.program_id || 'unknown'}-${day}-${slot.period}-${idx}`;
                   return (
                     <div
                                 key={sessionKey}
@@ -503,7 +549,7 @@ export default function Timetable() {
                                   {courseCode}
                           </Badge>
                                 <p className={`text-xs font-medium ${colorScheme.text}`}>
-                                  {session.course_unit?.name || "Unknown Course"}
+                                  {session.course_unit?.name || "Unknown Subject"}
                                 </p>
                                 <p className={`text-xs ${colorScheme.text} opacity-80`}>
                                   {session.lecturer?.name || "TBA"}
@@ -511,6 +557,11 @@ export default function Timetable() {
                                 <p className={`text-xs ${colorScheme.text} opacity-80`}>
                                   {session.room?.number || "TBA"}
                                 </p>
+                                {(session.group_size || session.student_size) && (
+                                  <p className={`text-xs ${colorScheme.text} opacity-90 font-medium`}>
+                                    {session.group_size || session.student_size} students
+                                  </p>
+                                )}
                                 <div className="flex gap-1 flex-wrap">
                                   {session.program && (
                                     <Badge variant="outline" className="text-xs">
@@ -540,26 +591,26 @@ export default function Timetable() {
       {/* Legend */}
       <Card className="glass-card p-4">
         <div className="space-y-3">
-          <span className="text-sm font-medium">Course Color Legend:</span>
+          <span className="text-sm font-medium">Subject Color Legend:</span>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {courses.map((course) => {
-              const colorScheme = getCourseColor(course.code);
+            {subjects.map((subject) => {
+              const colorScheme = getCourseColor(subject.name);
               return (
-                <div key={course.code} className="flex items-center gap-2">
+                <div key={subject.code} className="flex items-center gap-2">
                   <div className={`w-4 h-4 rounded border-2 ${colorScheme.border} ${colorScheme.bg}`} />
                   <div className="flex flex-col">
-                    <span className="text-xs font-semibold">{course.code}</span>
-                    <span className="text-xs text-muted-foreground truncate max-w-[120px]" title={course.name}>
-                      {course.name}
+                    <span className="text-xs font-semibold">{subject.code}</span>
+                    <span className="text-xs text-muted-foreground truncate max-w-[120px]" title={subject.name}>
+                      {subject.name}
                     </span>
                   </div>
                 </div>
               );
             })}
           </div>
-          {courses.length === 0 && (
+          {subjects.length === 0 && (
             <p className="text-xs text-muted-foreground">
-              No courses to display. Generate a timetable to see course color codes.
+              No subjects to display. Generate a timetable to see subject color codes.
             </p>
           )}
         </div>

@@ -19,9 +19,9 @@ from collections import defaultdict
 import argparse
 
 from app.models.lecturer import Lecturer
-from app.models.course import CourseUnit
+from app.models.subject import CourseUnit
 from app.models.room import Room
-from app.models.student import StudentGroup
+from app.models.program import Program
 from app.services.preprocessing.term_splitter import TermSplitter
 from app.services.preprocessing.canonical_term_planner import build_canonical_term_alignment
 from app.services.csp.csp_engine import CSPEngine
@@ -29,26 +29,77 @@ from app.services.gga.gga_engine import GGAEngine
 from app.config import Config
 from app.services.canonical_courses import get_canonical_id, CANONICAL_COURSE_MAPPING
 
+# Progress tracking
+PROGRESS_FILE_TEMPLATE = 'timetable_generation_progress_term{}.json'
+
+def update_progress(term_number, percentage, stage, message=""):
+    """Update progress file for frontend polling"""
+    import json
+    from pathlib import Path
+    # Write to current working directory (should be backend_dir when run from API)
+    progress_file = Path(PROGRESS_FILE_TEMPLATE.format(term_number))
+    progress_data = {
+        'term': term_number,
+        'percentage': percentage,
+        'stage': stage,
+        'message': message,
+        'timestamp': datetime.now().isoformat()
+    }
+    try:
+        with open(progress_file, 'w', encoding='utf-8') as f:
+            json.dump(progress_data, f)
+    except Exception as e:
+        # Don't fail generation if progress file write fails
+        print(f"Warning: Could not write progress file: {e}")
+
 def setup_database():
     """Connect to MongoDB"""
     mongo_uri = Config.MONGO_URI
     db_name = Config.MONGO_DB_NAME
-    client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+    # Increased timeout for MongoDB Atlas connections (30 seconds)
+    client = MongoClient(
+        mongo_uri,
+        serverSelectionTimeoutMS=30000,  # 30 seconds instead of 5
+        connectTimeoutMS=30000,
+        socketTimeoutMS=30000,
+        maxPoolSize=10,
+        retryWrites=True,
+        retryReads=True
+    )
     db = client[db_name]
     return client, db
 
-def fetch_all_data(db):
-    """Fetch all data from database"""
+def fetch_all_data(db, faculty: str = None):
+    """
+    Fetch all data from database
+    
+    Args:
+        db: MongoDB database instance
+        faculty: Optional faculty filter (e.g., "ICT", "Business")
+    
+    Returns:
+        Tuple of (student_groups, courses, lecturers, rooms)
+    """
     print("\n📥 Loading university data...")
+    if faculty:
+        print(f"   🎓 Filtering by faculty: {faculty}")
     
     # Load student groups (batch is stored but not used for filtering)
     query = {'is_active': True}
-    student_groups_data = list(db.student_groups.find(query))
-    student_groups = [StudentGroup.from_dict(sg) for sg in student_groups_data]
+    if faculty:
+        query['faculty'] = faculty
+    student_groups_data = list(db.programs.find(query))
+    student_groups = [Program.from_dict(sg) for sg in student_groups_data]
     
-    # Load all courses
+    # Load all courses - index by both id and code for flexible lookup
     courses_data = list(db.course_units.find())
-    courses = {CourseUnit.from_dict(c).id: CourseUnit.from_dict(c) for c in courses_data}
+    courses = {}
+    for c in courses_data:
+        course = CourseUnit.from_dict(c)
+        courses[course.id] = course
+        # Also index by code for programs that store course codes instead of IDs
+        if course.code and course.code != course.id:
+            courses[course.code] = course
     
     # Load all lecturers
     lecturers_data = list(db.lecturers.find())
@@ -65,18 +116,55 @@ def fetch_all_data(db):
     
     return student_groups, courses, lecturers, rooms
 
+def extract_course_code(cu):
+    """
+    Extract course code from course unit entry.
+    Handles formats:
+    - String: "BIT1101" or "BIT1101 - Name" or "BIT1101 - Name -Type"
+    - Dict: {'code': 'BIT1101', ...} or {'id': 'BIT1101', ...}
+    Returns the course code as a string, or None if not found.
+    """
+    if isinstance(cu, dict):
+        # Try 'code' first, then 'id'
+        course_id = cu.get('code') or cu.get('id')
+        return course_id.strip() if course_id else None
+    elif isinstance(cu, str):
+        # Extract course code from string (handles formats like "BIT1101 - Name" or "BIT1101")
+        # Split by " - " and take the first part as the course code
+        if " - " in cu:
+            course_code = cu.split(" - ")[0].strip()
+            return course_code
+        else:
+            # Already just a code
+            return cu.strip()
+    return None
+
 def get_term_courses_for_group(student_group, courses, term_number, canonical_alignment=None):
     """Get courses for a specific term for a student group"""
     course_ids = []
     for cu in student_group.course_units:
-        if isinstance(cu, dict):
-            course_id = cu.get('code')
-            if course_id:
-                course_ids.append(course_id)
-        elif isinstance(cu, str):
-            course_ids.append(cu)
+        course_code = extract_course_code(cu)
+        if course_code:
+            course_ids.append(course_code)
     
-    group_courses = [courses[cu_id] for cu_id in course_ids if cu_id in courses]
+    # Debug: Show what we're looking for
+    if not course_ids:
+        print(f"   ⚠️  {student_group.display_name}: No course_units found (empty array)")
+        return []
+    
+    group_courses = []
+    missing_courses = []
+    for cu_id in course_ids:
+        if cu_id in courses:
+            group_courses.append(courses[cu_id])
+        else:
+            missing_courses.append(cu_id)
+    
+    if missing_courses:
+        # Debug: Show which courses couldn't be found
+        print(f"   ⚠️  {student_group.display_name}: Could not find {len(missing_courses)} course(s): {', '.join(missing_courses[:3])}")
+        if len(missing_courses) > 3:
+            print(f"      ... and {len(missing_courses) - 3} more")
     
     if not group_courses:
         return []
@@ -285,7 +373,7 @@ def merge_equivalent_courses(group_entries, term_number, courses_dict, rooms_lis
                 'groups': []
             })
             data['groups'].append({
-                'student_group': original_group,
+                'program': original_group,
                 'course_id': course.id
             })
 
@@ -298,7 +386,7 @@ def merge_equivalent_courses(group_entries, term_number, courses_dict, rooms_lis
         unique_student_groups = {}
         course_units_per_group = {}  # Track which course units each group has
         for g in groups:
-            student_group = g['student_group']
+            student_group = g['program']
             course_id = g['course_id']
             # Use student_group.id as key to ensure we only count each group once
             if student_group.id not in unique_student_groups:
@@ -327,7 +415,7 @@ def merge_equivalent_courses(group_entries, term_number, courses_dict, rooms_lis
         # Merge all groups into one
         merged_group_id = f"MERGED_{canonical_id}_T{term_number}"
 
-        merged_student_group = StudentGroup.from_dict({
+        merged_student_group = Program.from_dict({
             'id': merged_group_id,
             'batch': 'MERGED',
             'program': 'MERGED',
@@ -380,13 +468,17 @@ def try_reschedule_conflict(assignment, group_time_slots, courses, lecturers, ro
     if not available_rooms:
         return None
     
-    # Get all time slots for this course
+    # Get all time slots for this course (load from database)
+    from app.services.config_loader import get_time_slots_for_config
     DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI']
-    PERIODS = {
-        'SLOT_1': {'start': '09:00', 'end': '11:00'},
-        'SLOT_2': {'start': '11:00', 'end': '13:00'},
-        'SLOT_3': {'start': '14:00', 'end': '16:00'},
-        'SLOT_4': {'start': '16:00', 'end': '18:00'}
+    
+    # Load time slots from database (uses cache)
+    time_slots_config = get_time_slots_for_config(use_cache=True)
+    PERIODS = {}
+    for slot in time_slots_config:
+        PERIODS[slot['period']] = {
+            'start': slot['start'],
+            'end': slot['end']
     }
     
     # Find existing assignments for this course and group
@@ -482,13 +574,17 @@ def expand_assignment_dicts(gene, merged_group_details, original_groups_dict, co
     Creates ONE row per student group, using the canonical course ID.
     """
     expanded = []
-    details = merged_group_details.get(gene.student_group_id)
+    details = merged_group_details.get(gene.program_id)
 
     if not details:
-        original_group = original_groups_dict.get(gene.student_group_id)
+        original_group = original_groups_dict.get(gene.program_id)
         course = courses.get(gene.course_unit_id)
         if not original_group or not course:
             return expanded
+        # Handle time_slot as either dict or object
+        time_slot_dict = gene.time_slot if isinstance(gene.time_slot, dict) else gene.time_slot.to_dict()
+        day = time_slot_dict.get('day') if isinstance(time_slot_dict, dict) else gene.time_slot.day
+        
         expanded.append({
             'session_id': gene.session_id,
             'student_group_id': original_group.id,
@@ -499,8 +595,8 @@ def expand_assignment_dicts(gene, merged_group_details, original_groups_dict, co
             'course_id': gene.course_unit_id,
             'lecturer_id': gene.lecturer_id,
             'room_id': gene.room_id,
-            'day': gene.time_slot.day,
-            'time_slot': gene.time_slot.to_dict(),
+            'day': day,
+            'time_slot': time_slot_dict,
             'session_number': gene.session_number
         })
         return expanded
@@ -509,12 +605,17 @@ def expand_assignment_dicts(gene, merged_group_details, original_groups_dict, co
     seen_groups = set()
     
     for idx, group_info in enumerate(details['groups'], start=1):
-        original_group = group_info['student_group']
+        original_group = group_info['program']
+        program_specific_course_id = group_info.get('course_id', canonical_id)  # Use program-specific course code
         
         if original_group.id in seen_groups:
             continue
         
         seen_groups.add(original_group.id)
+        # Handle time_slot as either dict or object
+        time_slot_dict = gene.time_slot if isinstance(gene.time_slot, dict) else gene.time_slot.to_dict()
+        day = time_slot_dict.get('day') if isinstance(time_slot_dict, dict) else gene.time_slot.day
+        
         expanded.append({
             'session_id': f"{gene.session_id}_{original_group.id}",
             'student_group_id': original_group.id,
@@ -522,11 +623,12 @@ def expand_assignment_dicts(gene, merged_group_details, original_groups_dict, co
             'semester': original_group.semester,
             'term': f'Term{term_number}',
             'group_size': original_group.size,
-            'course_id': canonical_id,
+            'course_id': program_specific_course_id,  # Use program-specific course code instead of canonical_id
+            'canonical_course_id': canonical_id,  # Keep canonical_id for reference
             'lecturer_id': gene.lecturer_id,
             'room_id': gene.room_id,
-            'day': gene.time_slot.day,
-            'time_slot': gene.time_slot.to_dict(),
+            'day': day,
+            'time_slot': time_slot_dict,
             'session_number': gene.session_number
         })
 
@@ -541,6 +643,9 @@ def generate_term_timetable(term_number):
     """
     start_time = datetime.now()
     
+    # Initialize progress
+    update_progress(term_number, 0, "Initializing", "Starting timetable generation...")
+    
     print("\n" + "="*70)
     print(f"          TERM {term_number} TIMETABLE GENERATION")
     print("="*70)
@@ -550,15 +655,22 @@ def generate_term_timetable(term_number):
     
     try:
         # Setup
+        update_progress(term_number, 5, "Setup", "Connecting to database...")
         client, db = setup_database()
         
+        # Reload canonical mappings with the actual database connection
+        from app.services.canonical_courses import reload_canonical_mappings
+        reload_canonical_mappings(db)
+        
         # Load all data
+        update_progress(term_number, 10, "Loading Data", "Loading student groups, courses, lecturers, and rooms...")
         student_groups, courses, lecturers, rooms = fetch_all_data(db)
         
         if not student_groups:
             print("❌ No student groups found!")
             return
         
+        update_progress(term_number, 15, "Canonical Alignment", "Building canonical course alignment...")
         canonical_alignment, canonical_decisions = build_canonical_term_alignment(student_groups, courses)
         if canonical_alignment:
             print("\n🔗 Canonical course alignment:")
@@ -582,9 +694,11 @@ def generate_term_timetable(term_number):
         print(f"\n📋 Processing student groups for Term {term_number}...")
         print("─"*70)
         
+        update_progress(term_number, 20, "Processing Groups", "Processing student groups and courses...")
         group_term_entries = []
 
-        for student_group in student_groups:
+        total_groups = len(student_groups)
+        for idx, student_group in enumerate(student_groups):
             term_courses = get_term_courses_for_group(
                 student_group,
                 courses,
@@ -594,7 +708,7 @@ def generate_term_timetable(term_number):
             
             if term_courses:
                 # Create term-specific student group
-                term_student_group = StudentGroup.from_dict({
+                term_student_group = Program.from_dict({
                     **student_group.to_dict(),
                     'term': f'Term{term_number}',
                     'course_units': [c.id for c in term_courses]
@@ -615,12 +729,17 @@ def generate_term_timetable(term_number):
                 print(f"   ✅ {student_group.display_name}: {len(term_courses)} courses")
             else:
                 print(f"   ⚠️  {student_group.display_name}: No courses for Term {term_number}")
+            
+            # Update progress for each group processed
+            progress_pct = 20 + int((idx + 1) / total_groups * 10)  # 20-30%
+            update_progress(term_number, progress_pct, "Processing Groups", f"Processed {idx + 1}/{total_groups} student groups...")
         
         if not term_student_groups:
             print(f"\n❌ No student groups have courses for Term {term_number}!")
             client.close()
             return
 
+        update_progress(term_number, 30, "Merging Courses", "Merging equivalent courses across programs...")
         original_student_groups_dict = {sg.id: sg for sg in student_groups}
         merged_student_groups, merged_course_units, merged_group_details = merge_equivalent_courses(
             group_term_entries,
@@ -638,7 +757,65 @@ def generate_term_timetable(term_number):
         print(f"   • Unique Courses: {len(merged_course_units)}")
         print(f"   • Total Sessions to Schedule: {total_sessions_to_schedule}")
         
+        # Early validation: Check time slots and room specializations before starting CSP
+        update_progress(term_number, 35, "Validation", "Validating configuration data...")
+        print(f"\n{'='*70}")
+        print("🔍 Pre-validation: Checking Configuration Data")
+        print("="*70)
+        from app.services.config_loader import get_time_slots_for_config, get_room_specializations
+        
+        try:
+            time_slots_config = get_time_slots_for_config(use_cache=True)
+            if not time_slots_config:
+                print("   ❌ ERROR: No time slots found in database!")
+                print("   Please seed time slots using: python seed_config_data.py")
+                print("   or use the Time Slots management page in the UI.")
+                client.close()
+                return
+            
+            # Validate time slot format
+            required_fields = ['period', 'start', 'end', 'is_afternoon']
+            invalid_slots = []
+            for slot in time_slots_config:
+                missing_fields = [field for field in required_fields if field not in slot]
+                if missing_fields:
+                    invalid_slots.append(f"{slot.get('period', 'UNKNOWN')}: missing {', '.join(missing_fields)}")
+            
+            if invalid_slots:
+                print(f"   ❌ ERROR: {len(invalid_slots)} time slot(s) have invalid format:")
+                for error in invalid_slots:
+                    print(f"      • {error}")
+                client.close()
+                return
+            
+            print(f"   ✅ Time Slots: {len(time_slots_config)} slots validated")
+            for slot in time_slots_config:
+                period_type = "Afternoon" if slot.get('is_afternoon', False) else "Morning"
+                print(f"      • {slot['period']}: {slot['start']}-{slot['end']} ({period_type})")
+            
+            # Validate room specializations
+            room_specs = get_room_specializations(use_cache=True)
+            if not room_specs:
+                print("   ⚠️  WARNING: No room specializations found in database!")
+                print("   Room specialization matching will be disabled.")
+                print("   To enable, seed specializations using: python seed_config_data.py")
+            else:
+                print(f"   ✅ Room Specializations: {len(room_specs)} specializations loaded")
+                spec_ids = [spec.get('id', 'UNKNOWN') for spec in room_specs[:5]]  # Show first 5
+                if len(room_specs) > 5:
+                    print(f"      • {', '.join(spec_ids)} ... and {len(room_specs) - 5} more")
+                else:
+                    print(f"      • {', '.join(spec_ids)}")
+        
+        except Exception as e:
+            print(f"   ❌ ERROR: Failed to validate configuration data: {e}")
+            import traceback
+            traceback.print_exc()
+            client.close()
+            return
+        
         # Step 1: CSP - Generate initial timetable for ALL groups together
+        update_progress(term_number, 40, "CSP Solving", "Running CSP solver to satisfy hard constraints...")
         print(f"\n{'='*70}")
         print("🧩 Step 1: CSP Engine - Satisfying Hard Constraints")
         print("="*70)
@@ -649,12 +826,13 @@ def generate_term_timetable(term_number):
             lecturers=list(lecturers.values()),
             rooms=list(rooms.values()),
             course_units=all_term_courses_list,
-            student_groups=term_student_groups,
+            programs=term_student_groups,
             merged_group_details=merged_group_details
         )
         
         print("   Running CSP solver...")
         csp_solution = csp_engine.solve()
+        update_progress(term_number, 60, "CSP Complete", f"CSP solver completed: {len(csp_solution) if csp_solution else 0} sessions scheduled")
         
         if not csp_solution:
             print("   ❌ CSP failed to find any assignments!")
@@ -677,10 +855,10 @@ def generate_term_timetable(term_number):
             gene = Gene(
                 session_id=assignment.variable_id,
                 course_unit_id=assignment.course_unit_id,
-                student_group_id=assignment.student_group_id,
+                program_id=assignment.program_id,
                 lecturer_id=assignment.lecturer_id,
-                room_id=assignment.room_id,
-                time_slot=assignment.time_slot,
+                room_id=assignment.room_number,
+                time_slot=assignment.time_slot.to_dict(),
                 term=assignment.term,
                 session_number=assignment.session_number
             )
@@ -712,6 +890,7 @@ def generate_term_timetable(term_number):
                 canonical_course_groups[canonical_id] = dict(session_map)
         
         # Step 3: GGA - Optimize for soft constraints
+        update_progress(term_number, 65, "GGA Optimization", "Running GGA optimization for soft constraints...")
         print(f"\n{'='*70}")
         print("🧬 Step 2: GGA Engine - Optimizing Soft Constraints")
         print("="*70)
@@ -722,7 +901,7 @@ def generate_term_timetable(term_number):
         
         gga_engine = GGAEngine(
             course_units=course_units_dict,
-            student_groups=student_groups_dict,
+            programs=student_groups_dict,
             lecturers=lecturers,
             rooms=rooms,
             variable_pairs=variable_pairs,  # Pass theory/practical pairs
@@ -734,13 +913,24 @@ def generate_term_timetable(term_number):
         gga_engine.population_size = 200  # Increased from 150
         
         print("   Running GGA optimization...")
+        # Track GGA progress
+        def gga_progress_callback(generation, best_fitness):
+            progress_pct = 65 + int((generation / gga_engine.max_generations) * 20)  # 65-85%
+            update_progress(term_number, progress_pct, "GGA Optimization", f"Generation {generation}/{gga_engine.max_generations} (Fitness: {best_fitness:.4f})")
+        
+        # Check if GGA engine supports progress callback
+        if hasattr(gga_engine, 'set_progress_callback'):
+            gga_engine.set_progress_callback(gga_progress_callback)
+        
         optimized_chromosome = gga_engine.optimize(csp_chromosome)
+        update_progress(term_number, 85, "GGA Complete", f"GGA optimization completed: {len(optimized_chromosome.genes)} sessions optimized")
         
         print(f"   ✅ Optimized Solution: {len(optimized_chromosome.genes)} sessions")
         if optimized_chromosome.fitness:
             print(f"   ✅ Fitness Score: {optimized_chromosome.fitness.overall_fitness:.4f}")
         
         # Step 4: Export to CSV
+        update_progress(term_number, 85, "Exporting", "Exporting timetable to CSV...")
         print(f"\n{'='*70}")
         print("📊 Step 3: Exporting Timetable")
         print("="*70)
@@ -888,10 +1078,12 @@ def generate_term_timetable(term_number):
                 print(f"      ... and {len(room_type_violations) - 5} more")
         
         # Export
+        update_progress(term_number, 90, "Exporting", "Writing CSV file...")
         filename = f'TIMETABLE_TERM{term_number}_COMPLETE.csv'
         export_to_csv(assignment_dicts, courses, lecturers, rooms, filename, term_number)
         
         # Generate statistics
+        update_progress(term_number, 95, "Generating Statistics", "Generating summary statistics...")
         generate_statistics(assignment_dicts, courses, lecturers, rooms, filename, term_number)
         
         # Close connection
@@ -899,6 +1091,8 @@ def generate_term_timetable(term_number):
         
         # Final summary
         elapsed = (datetime.now() - start_time).total_seconds()
+        
+        update_progress(term_number, 100, "Complete", f"Timetable generation completed successfully! ({elapsed:.2f}s)")
         
         print(f"\n{'='*70}")
         print("                    ✅ GENERATION COMPLETE!")
@@ -916,9 +1110,12 @@ def generate_term_timetable(term_number):
         print("="*70 + "\n")
         
     except Exception as e:
+        update_progress(term_number, -1, "Error", f"Generation failed: {str(e)}")
         print(f"\n❌ Error: {e}")
         import traceback
         traceback.print_exc()
+        # Re-raise the exception so the script exits with non-zero code
+        raise
 
 def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number):
     """Export timetable to CSV"""
@@ -949,13 +1146,17 @@ def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number)
                 
                 ts = assignment['time_slot']
                 
+                # Use program-specific course code (assignment['course_id']) instead of course.code
+                # This ensures BCS sessions show BCS course codes, not BIT codes
+                program_specific_course_code = assignment.get('course_id', course.code)
+                
                 row = {
                     "Session_ID": assignment['session_id'],
                     "Day": assignment['day'],
                     "Time_Slot": f"{ts['start']}-{ts['end']}",
                     "Start_Time": ts['start'],
                     "End_Time": ts['end'],
-                    "Course_Code": course.code,
+                    "Course_Code": program_specific_course_code,
                     "Course_Name": clean_course_name(course.name),  # Clean name without Theory/Practical
                     "Course_Type": course.preferred_room_type,
                     "Credits": course.credits,
@@ -989,13 +1190,17 @@ def export_to_csv(assignments, courses, lecturers, rooms, filename, term_number)
                     lecturer = lecturers.get(assignment['lecturer_id'], None)
                     room = rooms.get(assignment['room_id'], None)
                     
+                    # Use program-specific course code (assignment['course_id']) instead of course.code
+                    # This ensures BCS sessions show BCS course codes, not BIT codes
+                    program_specific_course_code = assignment.get('course_id', course.code if course else "N/A")
+                    
                     row = {
                         "Session_ID": assignment['session_id'],
                         "Day": assignment['day'],
                         "Time_Slot": assignment['time_slot'],
                         "Start_Time": assignment['start_time'],
                         "End_Time": assignment['end_time'],
-                        "Course_Code": course.code if course else "N/A",
+                        "Course_Code": program_specific_course_code,
                         "Course_Name": clean_course_name(course.name) if course else "N/A",  # Clean name
                         "Course_Type": course.preferred_room_type if course else "Theory",
                         "Credits": course.credits if course else 0,
@@ -1144,7 +1349,14 @@ Examples:
         term_number = args.term
     
     # Generate timetable
-    generate_term_timetable(term_number)
+    try:
+        generate_term_timetable(term_number)
+        sys.exit(0)  # Success
+    except Exception as e:
+        print(f"\n❌ Fatal error in timetable generation: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)  # Failure
 
 if __name__ == '__main__':
     main()

@@ -39,6 +39,8 @@ const apiRequest = async (endpoint, options = {}) => {
   if (response.status === 401) {
     // Clear invalid token
     setAuthToken(null);
+    // Dispatch event to notify auth context
+    window.dispatchEvent(new CustomEvent('auth:logout'));
     const error = await response.json().catch(() => ({ error: 'Authentication required' }));
     const authError = new Error(error.error || 'Authentication required');
     authError.status = 401;
@@ -58,14 +60,27 @@ const apiRequest = async (endpoint, options = {}) => {
 // Auth API
 export const authAPI = {
   login: async (email, password) => {
-    const response = await apiRequest('/auth/login', {
+    // Login endpoint doesn't require auth, so make direct request without token
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ email, password }),
     });
-    if (response.access_token) {
-      setAuthToken(response.access_token);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Login failed' }));
+      const authError = new Error(error.error || `HTTP error! status: ${response.status}`);
+      authError.status = response.status;
+      throw authError;
     }
-    return response;
+
+    const data = await response.json();
+    if (data.access_token) {
+      setAuthToken(data.access_token);
+    }
+    return data;
   },
   logout: () => {
     setAuthToken(null);
@@ -80,24 +95,24 @@ export const authAPI = {
   isAuthenticated: () => !!getAuthToken(),
 };
 
-// Courses API
-export const coursesAPI = {
-  getAll: () => apiRequest('/api/courses/'),
-  getById: (courseId) => apiRequest(`/api/courses/${courseId}`),
-  create: (courseData) => apiRequest('/api/courses/', {
+// Subjects API
+export const subjectsAPI = {
+  getAll: () => apiRequest('/api/subjects/'),
+  getById: (courseId) => apiRequest(`/api/subjects/${courseId}`),
+  create: (courseData) => apiRequest('/api/subjects/', {
     method: 'POST',
     body: JSON.stringify(courseData),
   }),
-  update: (courseId, courseData) => apiRequest(`/api/courses/${courseId}`, {
+  update: (courseId, courseData) => apiRequest(`/api/subjects/${courseId}`, {
     method: 'PUT',
     body: JSON.stringify(courseData),
   }),
-  delete: (courseId) => apiRequest(`/api/courses/${courseId}`, {
+  delete: (courseId) => apiRequest(`/api/subjects/${courseId}`, {
     method: 'DELETE',
   }),
-  bulkCreate: (courses) => apiRequest('/api/courses/bulk', {
+  bulkCreate: (subjects) => apiRequest('/api/subjects/bulk', {
     method: 'POST',
-    body: JSON.stringify({ courses }),
+    body: JSON.stringify({ subjects }),
   }),
 };
 
@@ -129,16 +144,16 @@ export const roomsAPI = {
     const endpoint = queryString ? `/api/rooms/?${queryString}` : '/api/rooms/';
     return apiRequest(endpoint);
   },
-  getById: (roomId) => apiRequest(`/api/rooms/${roomId}`),
+  getByNumber: (room_number) => apiRequest(`/api/rooms/${room_number}`),
   create: (roomData) => apiRequest('/api/rooms/', {
     method: 'POST',
     body: JSON.stringify(roomData),
   }),
-  update: (roomId, roomData) => apiRequest(`/api/rooms/${roomId}`, {
+  update: (room_number, roomData) => apiRequest(`/api/rooms/${room_number}`, {
     method: 'PUT',
     body: JSON.stringify(roomData),
   }),
-  delete: (roomId) => apiRequest(`/api/rooms/${roomId}`, {
+  delete: (room_number) => apiRequest(`/api/rooms/${room_number}`, {
     method: 'DELETE',
   }),
   bulkCreate: (rooms) => apiRequest('/api/rooms/bulk', {
@@ -152,41 +167,41 @@ export const roomsAPI = {
   getStatistics: () => apiRequest('/api/rooms/statistics'),
 };
 
-// Students/Student Groups API
-export const studentsAPI = {
+// Programs API
+export const programsAPI = {
   getAll: (params = {}) => {
     const queryString = new URLSearchParams(params).toString();
-    const endpoint = queryString ? `/api/students/?${queryString}` : '/api/students/';
+    const endpoint = queryString ? `/api/programs/?${queryString}` : '/api/programs/';
     return apiRequest(endpoint);
   },
-  getById: (groupId) => apiRequest(`/api/students/${groupId}`),
-  create: (groupData) => apiRequest('/api/students/', {
+  getById: (groupId) => apiRequest(`/api/programs/${groupId}`),
+  create: (groupData) => apiRequest('/api/programs/', {
     method: 'POST',
     body: JSON.stringify(groupData),
   }),
-  update: (groupId, groupData) => apiRequest(`/api/students/${groupId}`, {
+  update: (groupId, groupData) => apiRequest(`/api/programs/${groupId}`, {
     method: 'PUT',
     body: JSON.stringify(groupData),
   }),
-  delete: (groupId) => apiRequest(`/api/students/${groupId}`, {
+  delete: (groupId) => apiRequest(`/api/programs/${groupId}`, {
     method: 'DELETE',
   }),
-  bulkCreate: (groups) => apiRequest('/api/students/bulk', {
+  bulkCreate: (groups) => apiRequest('/api/programs/bulk', {
     method: 'POST',
-    body: JSON.stringify({ student_groups: groups }),
+    body: JSON.stringify({ programs: groups }),
   }),
-  addCourses: (groupId, courseUnits) => apiRequest(`/api/students/${groupId}/courses`, {
+  addCourses: (groupId, courseUnits) => apiRequest(`/api/programs/${groupId}/subjects`, {
     method: 'POST',
     body: JSON.stringify({ course_units: courseUnits }),
   }),
-  removeCourse: (groupId, courseId) => apiRequest(`/api/students/${groupId}/courses/${courseId}`, {
+  removeCourse: (groupId, courseId) => apiRequest(`/api/programs/${groupId}/subjects/${courseId}`, {
     method: 'DELETE',
   }),
-  search: (criteria) => apiRequest('/api/students/search', {
+  search: (criteria) => apiRequest('/api/programs/search', {
     method: 'POST',
     body: JSON.stringify(criteria),
   }),
-  getStatistics: () => apiRequest('/api/students/statistics'),
+  getStatistics: () => apiRequest('/api/programs/statistics'),
 };
 
 // Timetable API
@@ -195,6 +210,7 @@ export const timetableAPI = {
     method: 'POST',
     body: JSON.stringify(params),
   }),
+  getProgress: (term) => apiRequest(`/api/timetable/progress/${term}`),
   getById: (timetableId) => apiRequest(`/api/timetable/${timetableId}`),
   list: () => apiRequest('/api/timetable/list'),
   delete: (timetableId) => apiRequest(`/api/timetable/${timetableId}`, {
@@ -217,16 +233,86 @@ export const canonicalGroupsAPI = {
   delete: (canonicalId) => apiRequest(`/api/canonical-groups/${canonicalId}`, {
     method: 'DELETE',
   }),
-  getCourses: (canonicalId) => apiRequest(`/api/canonical-groups/${canonicalId}/courses`),
+  getCourses: (canonicalId) => apiRequest(`/api/canonical-groups/${canonicalId}/subjects`),
+};
+
+// Reports API
+export const reportsAPI = {
+  getReports: (timetableId) => apiRequest(`/api/reports/${timetableId}`),
+  getLecturerWorkload: (timetableId) => apiRequest(`/api/reports/${timetableId}/lecturer-workload`),
+  getRoomUtilization: (timetableId) => apiRequest(`/api/reports/${timetableId}/room-utilization`),
+};
+
+// Import API
+export const importAPI = {
+  importLecturers: (data) => apiRequest('/api/import/lecturers', {
+    method: 'POST',
+    body: JSON.stringify({ data }),
+  }),
+  importSubjects: (data) => apiRequest('/api/import/subjects', {
+    method: 'POST',
+    body: JSON.stringify({ data }),
+  }),
+  importRooms: (data) => apiRequest('/api/import/rooms', {
+    method: 'POST',
+    body: JSON.stringify({ data }),
+  }),
+  importPrograms: (data) => apiRequest('/api/import/programs', {
+    method: 'POST',
+    body: JSON.stringify({ data }),
+  }),
+  importCanonicalGroups: (data) => apiRequest('/api/import/canonical-groups', {
+    method: 'POST',
+    body: JSON.stringify({ data }),
+  }),
+};
+
+// Room Specializations API
+export const roomSpecializationsAPI = {
+  getAll: () => apiRequest('/api/room-specializations/'),
+  getById: (id) => apiRequest(`/api/room-specializations/${id}`),
+  create: (data) => apiRequest('/api/room-specializations/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id, data) => apiRequest(`/api/room-specializations/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id) => apiRequest(`/api/room-specializations/${id}`, {
+    method: 'DELETE',
+  }),
+};
+
+// Time Slots API
+export const timeSlotsAPI = {
+  getAll: () => apiRequest('/api/time-slots/'),
+  getActive: () => apiRequest('/api/time-slots/active'),
+  getByPeriod: (period) => apiRequest(`/api/time-slots/${period}`),
+  create: (data) => apiRequest('/api/time-slots/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (period, data) => apiRequest(`/api/time-slots/${period}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (period) => apiRequest(`/api/time-slots/${period}`, {
+    method: 'DELETE',
+  }),
 };
 
 export default {
   auth: authAPI,
-  courses: coursesAPI,
+  subjects: subjectsAPI,
   lecturers: lecturersAPI,
   rooms: roomsAPI,
-  students: studentsAPI,
+  programs: programsAPI,
   timetable: timetableAPI,
   canonicalGroups: canonicalGroupsAPI,
+  reports: reportsAPI,
+  import: importAPI,
+  roomSpecializations: roomSpecializationsAPI,
+  timeSlots: timeSlotsAPI,
 };
 

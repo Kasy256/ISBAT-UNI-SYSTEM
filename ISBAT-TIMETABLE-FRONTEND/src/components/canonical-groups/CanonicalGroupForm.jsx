@@ -81,20 +81,20 @@ export function CanonicalGroupForm({
   };
 
   const getCourseDisplay = (courseCode) => {
-    const course = availableCourses.find((c) => c.code === courseCode);
-    return course ? `${course.code} - ${course.name}` : courseCode;
+    const subject = availableCourses.find((c) => c.code === courseCode);
+    return subject ? `${subject.code} - ${subject.name}` : courseCode;
   };
 
-  // Get unique course codes
+  // Get unique subject codes
   const uniqueCourseCodes = useMemo(() => {
     const codes = new Set();
-    availableCourses.forEach((course) => {
-      if (course.code) codes.add(course.code);
+    availableCourses.forEach((subject) => {
+      if (subject.code) codes.add(subject.code);
     });
     return Array.from(codes).sort();
   }, [availableCourses]);
 
-  // Filter courses based on search query
+  // Filter subjects based on search query
   const filteredCourses = useMemo(() => {
     if (!searchQuery.trim()) {
       return uniqueCourseCodes.filter((code) => !formData.course_codes.includes(code));
@@ -104,11 +104,11 @@ export function CanonicalGroupForm({
     return uniqueCourseCodes
       .filter((code) => {
         if (formData.course_codes.includes(code)) return false;
-        const course = availableCourses.find((c) => c.code === code);
-        if (!course) return code.toLowerCase().includes(query);
+        const subject = availableCourses.find((c) => c.code === code);
+        if (!subject) return code.toLowerCase().includes(query);
         return (
           code.toLowerCase().includes(query) ||
-          course.name?.toLowerCase().includes(query)
+          subject.name?.toLowerCase().includes(query)
         );
       })
       .sort();
@@ -119,12 +119,12 @@ export function CanonicalGroupForm({
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {group ? "Edit Course Group" : "Add Course Group"}
+            {group ? "Edit Subject Group" : "Add Subject Group"}
           </DialogTitle>
           <DialogDescription>
             {group
-              ? "Update course group information"
-              : "Create a group of equivalent courses across different programs"}
+              ? "Update subject group information"
+              : "Create a group of equivalent subjects across different programs"}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -168,15 +168,15 @@ export function CanonicalGroupForm({
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
-                placeholder="This group represents the Programming in C course taught across different programs..."
+                placeholder="This group represents the Programming in C subject taught across different programs..."
                 rows={3}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Course Codes *</Label>
+              <Label>Subject Codes *</Label>
               <p className="text-xs text-muted-foreground mb-2">
-                Select course codes that represent the same course across different programs
+                Select subject codes that represent the same subject across different programs
               </p>
               <div className="space-y-2">
                 <Popover 
@@ -198,8 +198,8 @@ export function CanonicalGroupForm({
                     >
                       <span className="text-muted-foreground">
                         {formData.course_codes.length > 0
-                          ? `${formData.course_codes.length} course${formData.course_codes.length > 1 ? "s" : ""} selected`
-                          : "Add course code"}
+                          ? `${formData.course_codes.length} subject${formData.course_codes.length > 1 ? "s" : ""} selected`
+                          : "Add subject code"}
                       </span>
                       <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
@@ -217,12 +217,12 @@ export function CanonicalGroupForm({
                           className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
                         />
                       </div>
-                      {/* Scrollable Course List */}
+                      {/* Scrollable Subject List */}
                       <div className="max-h-[300px] overflow-y-auto overflow-x-hidden custom-scrollbar">
                         {filteredCourses.length > 0 ? (
                           <div className="p-1">
                             {filteredCourses.map((code) => {
-                              const course = availableCourses.find((c) => c.code === code);
+                              const subject = availableCourses.find((c) => c.code === code);
                               const isSelected = formData.course_codes.includes(code);
                               return (
                                 <div
@@ -243,9 +243,9 @@ export function CanonicalGroupForm({
                                         <Check className="h-4 w-4 text-primary" />
                                       )}
                                     </div>
-                                    {course && (
+                                    {subject && (
                                       <span className="text-xs text-muted-foreground">
-                                        {course.name}
+                                        {subject.name}
                                       </span>
                                     )}
                                   </div>
@@ -256,8 +256,8 @@ export function CanonicalGroupForm({
                         ) : (
                           <div className="px-2 py-6 text-center text-sm text-muted-foreground">
                             {searchQuery
-                              ? "No courses found matching your search"
-                              : "All available courses have been added"}
+                              ? "No subjects found matching your search"
+                              : "All available subjects have been added"}
                           </div>
                         )}
                       </div>
@@ -288,7 +288,7 @@ export function CanonicalGroupForm({
                 )}
                 {formData.course_codes.length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    No course codes selected. Add at least one course code.
+                    No subject codes selected. Add at least one subject code.
                   </p>
                 )}
               </div>
@@ -306,7 +306,7 @@ export function CanonicalGroupForm({
               type="submit"
               disabled={formData.course_codes.length === 0}
             >
-              {group ? "Update" : "Add"} Course Group
+              {group ? "Update" : "Add"} Subject Group
             </Button>
           </DialogFooter>
         </form>

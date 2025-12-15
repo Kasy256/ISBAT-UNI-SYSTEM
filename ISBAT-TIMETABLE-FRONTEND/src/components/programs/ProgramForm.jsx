@@ -17,14 +17,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
-import { X } from "lucide-react";
+import { X, Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function StudentGroupForm({
+export function ProgramForm({
   open,
   onOpenChange,
   onSubmit,
-  group,
+  program,
   availableCourses = [],
 }) {
   const [formData, setFormData] = useState({
@@ -37,11 +51,13 @@ export function StudentGroupForm({
     course_units: [],
     is_active: true,
   });
+  const [subjectSearchOpen, setSubjectSearchOpen] = useState(false);
+  const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
 
   useEffect(() => {
-    if (group) {
+    if (program) {
       // Normalize course_units - convert objects to IDs if needed
-      const normalizedCourseUnits = (group.course_units || []).map((cu) => {
+      const normalizedCourseUnits = (program.course_units || []).map((cu) => {
         if (typeof cu === 'object' && cu !== null) {
           return cu.code || cu.id || cu;
         }
@@ -49,29 +65,29 @@ export function StudentGroupForm({
       });
       
       setFormData({
-        id: group.id || "",
-        batch: group.batch || "",
-        program: group.program || "",
-        semester: group.semester || "",
-        term: group.term || "Term1", // Default to Term1 if not set
-        size: group.size || 0,
+        id: program.id || "",
+        batch: program.batch || "",
+        program: program.program || "",
+        semester: program.semester || "",
+        term: program.term || "Term1", // Default to Term1 if not set
+        size: program.size || 0,
         course_units: normalizedCourseUnits,
-        is_active: group.is_active !== undefined ? group.is_active : true,
+        is_active: program.is_active !== undefined ? program.is_active : true,
       });
     } else {
-      // Reset form for new group
+      // Reset form for new program
       setFormData({
         id: "",
         batch: "",
         program: "",
         semester: "",
-        term: "Term1", // Default to Term1 for new groups
+        term: "Term1", // Default to Term1 for new programs
         size: 0,
         course_units: [],
         is_active: true,
       });
     }
-  }, [group, open]);
+  }, [program, open]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -109,37 +125,53 @@ export function StudentGroupForm({
     if (typeof courseIdOrObj === 'object' && courseIdOrObj !== null) {
       return `${courseIdOrObj.code || ''} - ${courseIdOrObj.name || ''}`;
     }
-    const course = availableCourses.find(
+    const subject = availableCourses.find(
       (c) => c.id === courseIdOrObj || c.code === courseIdOrObj
     );
-    return course ? `${course.code} - ${course.name}` : courseIdOrObj;
+    return subject ? `${subject.code} - ${subject.name}` : courseIdOrObj;
   };
 
-  // Filter courses by program if program is selected
-  const filteredCourses = formData.program
-    ? availableCourses.filter(
-        (c) => !c.program || c.program === formData.program
-      )
-    : availableCourses;
+  // Show all subjects (don't filter by program - subjects can be assigned to any program)
+  // Get available subjects (not already selected)
+  const availableSubjects = availableCourses.filter((c) => {
+    const courseId = c.id || c.code;
+    return !formData.course_units.some((cu) => {
+      if (typeof cu === 'object' && cu !== null) {
+        return (cu.code === courseId || cu.id === courseId);
+      }
+      return cu === courseId;
+    });
+  });
+  
+  // Filter subjects by search query
+  const searchFilteredSubjects = subjectSearchQuery
+    ? availableSubjects.filter((subject) => {
+        const searchLower = subjectSearchQuery.toLowerCase();
+        return (
+          subject.code?.toLowerCase().includes(searchLower) ||
+          subject.name?.toLowerCase().includes(searchLower)
+        );
+      })
+    : availableSubjects;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {group ? "Edit Student Group" : "Add Student Group"}
+            {program ? "Edit Program" : "Add Program"}
           </DialogTitle>
           <DialogDescription>
-            {group
-              ? "Update student group information"
-              : "Create a new student group and assign courses"}
+            {program
+              ? "Update program information"
+              : "Create a new program and assign subjects"}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="id">Group ID *</Label>
+                <Label htmlFor="id">Program ID *</Label>
                 <Input
                   id="id"
                   value={formData.id}
@@ -148,14 +180,14 @@ export function StudentGroupForm({
                   }
                   placeholder="SG_BSCAIT_S126_S1_T1"
                   required
-                  disabled={!!group} // Disable ID editing for existing groups
+                  disabled={!!program} // Disable ID editing for existing programs
                 />
                 <p className="text-xs text-muted-foreground">
                   Format: SG_PROGRAM_BATCH_SEMESTER_TERM
                 </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="batch">Batch *</Label>
+                <Label htmlFor="batch">BATCH *</Label>
                 <Input
                   id="batch"
                   value={formData.batch}
@@ -170,7 +202,7 @@ export function StudentGroupForm({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="program">Program *</Label>
+                <Label htmlFor="program">Program Name *</Label>
                 <Input
                   id="program"
                   value={formData.program}
@@ -205,7 +237,7 @@ export function StudentGroupForm({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="size">Group Size *</Label>
+              <Label htmlFor="size">Student Size *</Label>
                 <Input
                   id="size"
                   type="number"
@@ -222,40 +254,69 @@ export function StudentGroupForm({
             </div>
 
             <div className="space-y-2">
-              <Label>Course Units *</Label>
+              <Label>Subjects *</Label>
               <div className="space-y-2">
-                <Select
-                  onValueChange={(value) => {
-                    if (!formData.course_units.includes(value)) {
-                      toggleCourse(value);
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Add course unit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredCourses
-                      .filter((c) => {
-                        // Check if course is already in course_units
-                        const courseId = c.id || c.code;
-                        return !formData.course_units.some((cu) => {
-                          if (typeof cu === 'object' && cu !== null) {
-                            return (cu.code === courseId || cu.id === courseId);
-                          }
-                          return cu === courseId;
-                        });
-                      })
-                      .map((course) => (
-                        <SelectItem
-                          key={course.id}
-                          value={course.id || course.code}
-                        >
-                          {course.code} - {course.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={subjectSearchOpen} onOpenChange={setSubjectSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={subjectSearchOpen}
+                      className="w-full justify-between"
+                    >
+                      <span className="text-muted-foreground">
+                        {availableSubjects.length > 0 
+                          ? "Search and select subjects..." 
+                          : "No subjects available"}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[600px] p-0" align="start">
+                    <Command shouldFilter={false}>
+                      <CommandInput 
+                        placeholder="Search subjects by code or name..." 
+                        value={subjectSearchQuery}
+                        onValueChange={setSubjectSearchQuery}
+                      />
+                      <CommandList className="max-h-[300px] overflow-y-auto">
+                        <CommandEmpty>No subjects found.</CommandEmpty>
+                        <CommandGroup>
+                          {searchFilteredSubjects.map((subject) => {
+                            const courseId = subject.id || subject.code;
+                            const isSelected = formData.course_units.some((cu) => {
+                              if (typeof cu === 'object' && cu !== null) {
+                                return (cu.code === courseId || cu.id === courseId);
+                              }
+                              return cu === courseId;
+                            });
+                            
+                            return (
+                              <CommandItem
+                                key={subject.id || subject.code}
+                                value={`${subject.code} ${subject.name}`}
+                                onSelect={() => {
+                                  toggleCourse(courseId);
+                                  // Don't close popover - allow multiple selections
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    isSelected ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                <span className="flex-1">
+                                  {subject.code} - {subject.name}
+                                </span>
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 {formData.course_units.length > 0 && (
                   <div className="flex flex-wrap gap-2 p-2 border rounded-md">
                     {formData.course_units.map((courseIdOrObj, index) => {
@@ -305,11 +366,11 @@ export function StudentGroupForm({
                   htmlFor="is_active"
                   className="text-sm font-normal cursor-pointer"
                 >
-                  Active Group
+                  Active Program
                 </Label>
               </div>
               <p className="text-xs text-muted-foreground">
-                Inactive groups won't be included in timetable generation
+                Inactive programs won't be included in timetable generation
               </p>
             </div>
           </div>
@@ -322,7 +383,7 @@ export function StudentGroupForm({
               Cancel
             </Button>
             <Button type="submit">
-              {group ? "Update" : "Add"} Student Group
+              {program ? "Update" : "Add"} Program
             </Button>
           </DialogFooter>
         </form>

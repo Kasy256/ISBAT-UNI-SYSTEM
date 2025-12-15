@@ -35,7 +35,7 @@ export default function Conflicts() {
 
     timetables.forEach((timetable) => {
       // Use verification results if available (from verify_timetable_constraints.py)
-      if (timetable.verification && timetable.verification.violations) {
+      if (timetable.verification && timetable.verification.violations && Array.isArray(timetable.verification.violations) && timetable.verification.violations.length > 0) {
         timetable.verification.violations.forEach((violation) => {
           // Handle both dict and object formats
           const getValue = (key, defaultValue) => {
@@ -45,13 +45,75 @@ export default function Conflicts() {
             return defaultValue;
           };
           
+          // Map constraint type to readable name
+          const constraintType = getValue('constraint', 'unknown');
+          const constraintTypeMap = {
+            'double_booking': 'Double Booking',
+            'room_capacity': 'Room Capacity',
+            'room_type': 'Room Type Mismatch',
+            'weekly_limit': 'Lecturer Weekly Limit',
+            'daily_limit': 'Lecturer Daily Limit',
+            'time_block': 'Invalid Time Block',
+            'same_day_unit': 'Same Day Repetition',
+            'canonical_same_day_repetition': 'Canonical Same Day Repetition',
+            'canonical_merge_capacity': 'Canonical Merge Capacity',
+            'theory_practical_pairing': 'Theory/Practical Pairing',
+            'schedule_gap': 'Schedule Gap',
+            'unbalanced_distribution': 'Unbalanced Distribution',
+            'day_overload': 'Day Overload',
+            'room_underutilization': 'Room Underutilization',
+            'room_overutilization': 'Room Overutilization',
+            'course_incomplete': 'Course Incomplete',
+            'lecturer_diversity': 'Lecturer Diversity',
+            'semester_no_classes': 'Semester No Classes',
+            'term_semester_mismatch': 'Term/Semester Mismatch'
+          };
+          
+          const type = constraintTypeMap[constraintType] || constraintType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          const message = getValue('message', 'No description');
+          const severity = (getValue('severity', 'WARNING') || 'WARNING').toLowerCase();
+          
+          // Determine affected resource based on constraint type
+          let affected = 'Unknown';
+          if (constraintType === 'double_booking') {
+            const entityType = getValue('type', '');
+            const entityName = getValue('entity_name', getValue('entity', ''));
+            affected = `${entityType === 'lecturer' ? 'Lecturer' : 'Program'}: ${entityName}`;
+          } else if (constraintType === 'room_capacity' || constraintType === 'room_type' || constraintType === 'room_underutilization' || constraintType === 'room_overutilization') {
+            affected = `Room: ${getValue('room', 'Unknown')}`;
+          } else if (constraintType === 'weekly_limit' || constraintType === 'daily_limit' || constraintType === 'lecturer_diversity') {
+            affected = `Lecturer: ${getValue('lecturer_id', 'Unknown')}`;
+          } else if (constraintType === 'schedule_gap' || constraintType === 'unbalanced_distribution' || constraintType === 'day_overload') {
+            affected = `Program: ${getValue('program', 'Unknown')}`;
+          } else if (constraintType === 'course_incomplete') {
+            affected = `Program: ${getValue('program', 'Unknown')} - Course: ${getValue('original_code', getValue('canonical_id', 'Unknown'))}`;
+          } else {
+            affected = getValue('program', getValue('room', getValue('lecturer_id', getValue('entity_name', 'Unknown'))));
+          }
+          
+          // Generate suggested fix based on constraint type
+          let suggestedFix = 'Review and adjust manually';
+          if (constraintType === 'double_booking') {
+            suggestedFix = 'Reschedule one of the conflicting sessions to a different time slot';
+          } else if (constraintType === 'room_capacity') {
+            suggestedFix = 'Move to a room with sufficient capacity';
+          } else if (constraintType === 'room_type') {
+            suggestedFix = 'Move to an appropriate room type (Lab/Theory)';
+          } else if (constraintType === 'schedule_gap') {
+            suggestedFix = 'Consider redistributing sessions to reduce gaps';
+          } else if (constraintType === 'weekly_limit' || constraintType === 'daily_limit') {
+            suggestedFix = 'Redistribute lecturer workload across the week';
+          } else if (constraintType === 'course_incomplete') {
+            suggestedFix = 'Ensure all required sessions are scheduled';
+          }
+          
           detectedConflicts.push({
             id: conflictId++,
-            type: getValue('constraint_type', getValue('type', 'Unknown Constraint')),
-            description: getValue('message', getValue('description', 'No description')),
-            affected: getValue('affected_resource', getValue('affected', 'Unknown')),
-            suggestedFix: getValue('suggested_fix', getValue('suggestedFix', 'Review and adjust manually')),
-            severity: (getValue('severity', 'medium') || 'medium').toLowerCase(),
+            type: type,
+            description: message,
+            affected: affected,
+            suggestedFix: suggestedFix,
+            severity: severity,
             autoFix: false,
             timetable_id: timetable._id,
             term: timetable.term || 'N/A',
@@ -68,7 +130,7 @@ export default function Conflicts() {
           groupSessions.forEach((session) => {
             sessions.push({
               ...session,
-              student_group_id: groupId,
+              program_id: groupId,
               timetable_id: timetable._id,
             });
           });

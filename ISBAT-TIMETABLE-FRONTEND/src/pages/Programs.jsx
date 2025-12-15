@@ -26,89 +26,91 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StudentGroupForm } from "@/components/student-groups/StudentGroupForm";
+import { ProgramForm } from "@/components/programs/ProgramForm";
+import ImportDialog from "@/components/ImportDialog";
 import { toast } from "sonner";
 import { Button as UIButton } from "@/components/ui/button";
-import { studentsAPI, coursesAPI } from "@/lib/api";
+import { programsAPI, subjectsAPI, importAPI } from "@/lib/api";
 
-export default function StudentGroups() {
+export default function Programs() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [programFilter, setProgramFilter] = useState("all");
   const [semesterFilter, setSemesterFilter] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
-  const [editingGroup, setEditingGroup] = useState(undefined);
+  const [importOpen, setImportOpen] = useState(false);
+  const [editingProgram, setEditingProgram] = useState(undefined);
   const [sortBy, setSortBy] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
 
-  // Fetch student groups from API
+  // Fetch programs from API
   const { data, isLoading, error } = useQuery({
-    queryKey: ['student-groups'],
+    queryKey: ['programs'],
     queryFn: async () => {
-      const response = await studentsAPI.getAll();
-      return response.student_groups || [];
+      const response = await programsAPI.getAll();
+      return response.programs || [];
     },
   });
 
-  // Fetch courses for course assignment
+  // Fetch subjects for subject assignment
   const { data: coursesData } = useQuery({
-    queryKey: ['courses'],
+    queryKey: ['subjects'],
     queryFn: async () => {
-      const response = await coursesAPI.getAll();
-      return response.courses || [];
+      const response = await subjectsAPI.getAll();
+      return response.subjects || [];
     },
   });
 
-  const groups = data || [];
-  const courses = coursesData || [];
+  const programEntries = data || [];
+  const subjects = coursesData || [];
 
   // Get unique values for filters
-  const programs = useMemo(() => {
-    const unique = [...new Set(groups.map(g => g.program).filter(Boolean))];
+  const programNames = useMemo(() => {
+    const unique = [...new Set(programEntries.map(p => p.program).filter(Boolean))];
     return unique.sort();
-  }, [groups]);
+  }, [programEntries]);
 
   const semesters = useMemo(() => {
-    const unique = [...new Set(groups.map(g => g.semester).filter(Boolean))];
+    const unique = [...new Set(programEntries.map(p => p.semester).filter(Boolean))];
     return unique.sort();
-  }, [groups]);
+  }, [programEntries]);
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: studentsAPI.create,
+    mutationFn: programsAPI.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['student-groups'] });
-      toast.success("Student group created successfully");
+      queryClient.invalidateQueries({ queryKey: ['programs'] });
+      toast.success("Program created successfully");
       setFormOpen(false);
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to create student group");
+      toast.error(error.message || "Failed to create program");
     },
   });
 
   // Update mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => studentsAPI.update(id, data),
+    mutationFn: ({ id, data }) => programsAPI.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['student-groups'] });
-      toast.success("Student group updated successfully");
+      queryClient.invalidateQueries({ queryKey: ['programs'] });
+      toast.success("Program updated successfully");
       setFormOpen(false);
-      setEditingGroup(undefined);
+      setEditingProgram(undefined);
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to update student group");
+      toast.error(error.message || "Failed to update program");
     },
   });
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: studentsAPI.delete,
+    mutationFn: programsAPI.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['student-groups'] });
-      toast.success("Student group deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ['programs'] });
+      toast.success("Program deleted successfully");
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to delete student group");
+      toast.error(error.message || "Failed to delete program");
     },
   });
 
@@ -121,16 +123,16 @@ export default function StudentGroups() {
     }
   };
 
-  const filteredAndSortedGroups = useMemo(() => {
-    let filtered = groups.filter((group) => {
+  const filteredPrograms = useMemo(() => {
+    let filtered = programEntries.filter((programEntry) => {
       const matchesSearch =
-        group.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        group.batch?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        group.program?.toLowerCase().includes(searchQuery.toLowerCase());
+        programEntry.id?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        programEntry.batch?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        programEntry.program?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesProgram =
-        programFilter === "all" || group.program === programFilter;
+        programFilter === "all" || programEntry.program === programFilter;
       const matchesSemester =
-        semesterFilter === "all" || group.semester === semesterFilter;
+        semesterFilter === "all" || programEntry.semester === semesterFilter;
       return matchesSearch && matchesProgram && matchesSemester;
     });
 
@@ -142,32 +144,32 @@ export default function StudentGroups() {
     }
 
     return filtered;
-  }, [groups, searchQuery, programFilter, semesterFilter, sortBy, sortOrder]);
+  }, [programEntries, searchQuery, programFilter, semesterFilter, sortBy, sortOrder]);
 
-  const handleAddGroup = (groupData) => {
-    createMutation.mutate(groupData);
+  const handleAddProgram = (programData) => {
+    createMutation.mutate(programData);
   };
 
-  const handleEditGroup = (groupData) => {
-    if (editingGroup) {
-      updateMutation.mutate({ id: editingGroup.id, data: groupData });
+  const handleEditProgram = (programData) => {
+    if (editingProgram) {
+      updateMutation.mutate({ id: editingProgram.id, data: programData });
     }
   };
 
-  const handleDeleteGroup = (id) => {
-    if (confirm("Are you sure you want to delete this student group?")) {
+  const handleDeleteProgram = (id) => {
+    if (confirm("Are you sure you want to delete this program?")) {
       deleteMutation.mutate(id);
     }
   };
 
-  const openEditForm = (group) => {
-    setEditingGroup(group);
+  const openEditForm = (program) => {
+    setEditingProgram(program);
     setFormOpen(true);
   };
 
   const closeForm = () => {
     setFormOpen(false);
-    setEditingGroup(undefined);
+    setEditingProgram(undefined);
   };
 
   const getCourseName = (courseIdOrObj) => {
@@ -175,12 +177,12 @@ export default function StudentGroups() {
     if (typeof courseIdOrObj === 'object' && courseIdOrObj !== null) {
       return `${courseIdOrObj.code || ''} - ${courseIdOrObj.name || ''}`;
     }
-    const course = courses.find(c => c.id === courseIdOrObj || c.code === courseIdOrObj);
-    return course ? `${course.code} - ${course.name}` : courseIdOrObj;
+    const subject = subjects.find(c => c.id === courseIdOrObj || c.code === courseIdOrObj);
+    return subject ? `${subject.code} - ${subject.name}` : courseIdOrObj;
   };
 
   const getCourseKey = (courseIdOrObj) => {
-    // Get a unique key for the course
+    // Get a unique key for the subject
     if (typeof courseIdOrObj === 'object' && courseIdOrObj !== null) {
       return courseIdOrObj.code || courseIdOrObj.id || JSON.stringify(courseIdOrObj);
     }
@@ -192,17 +194,16 @@ export default function StudentGroups() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Student Groups</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Programs</h1>
           <p className="text-muted-foreground mt-1">
-            Manage student cohorts and assign courses to groups
+            Manage academic programs and assign subjects
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <UIButton variant="outline">Download Template</UIButton>
-          <UIButton variant="outline">Import</UIButton>
+          <UIButton variant="outline" onClick={() => setImportOpen(true)}>Import</UIButton>
           <Button className="gap-2" onClick={() => setFormOpen(true)}>
             <Plus className="h-4 w-4" />
-            Add Student Group
+            Add Program
           </Button>
         </div>
       </div>
@@ -213,7 +214,7 @@ export default function StudentGroups() {
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search groups..."
+              placeholder="Search programs..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -225,9 +226,9 @@ export default function StudentGroups() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Programs</SelectItem>
-              {programs.map((program) => (
-                <SelectItem key={program} value={program}>
-                  {program}
+              {programNames.map((programName) => (
+                <SelectItem key={programName} value={programName}>
+                  {programName}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -253,15 +254,15 @@ export default function StudentGroups() {
         {isLoading ? (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="h-6 w-6 animate-spin" />
-            <span className="ml-2">Loading student groups...</span>
+            <span className="ml-2">Loading programs...</span>
           </div>
         ) : error ? (
           <div className="p-8 text-center text-destructive">
-            Error loading student groups: {error.message}
+            Error loading programs: {error.message}
           </div>
-        ) : filteredAndSortedGroups.length === 0 ? (
+        ) : filteredPrograms.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
-            No student groups found
+            No programs found
           </div>
         ) : (
           <Table>
@@ -273,40 +274,38 @@ export default function StudentGroups() {
                     className="h-8 px-2 hover:bg-transparent"
                     onClick={handleSort}
                   >
-                    Group ID
+                    Program Code
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
-                <TableHead>Program</TableHead>
-                <TableHead>Batch</TableHead>
+                <TableHead>Program Name</TableHead>
+                <TableHead>BATCH</TableHead>
                 <TableHead>Semester</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Courses</TableHead>
+                <TableHead>Student Size</TableHead>
+                <TableHead>Subjects</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAndSortedGroups.map((group) => (
-                <TableRow key={group.id}>
-                  <TableCell className="font-medium">{group.id}</TableCell>
+              {filteredPrograms.map((programEntry) => (
+                <TableRow key={programEntry.id}>
+                  <TableCell className="font-medium">{programEntry.id}</TableCell>
+                  <TableCell>{programEntry.program}</TableCell>
+                  <TableCell>{programEntry.batch}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">{group.program}</Badge>
-                  </TableCell>
-                  <TableCell>{group.batch}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{group.semester}</Badge>
+                    <Badge variant="secondary">{programEntry.semester}</Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Users className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-semibold">{group.size}</span>
+                      <span className="font-semibold">{programEntry.size}</span>
                     </div>
                   </TableCell>
                   <TableCell>
-                    {group.course_units && group.course_units.length > 0 ? (
+                    {programEntry.course_units && programEntry.course_units.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
-                        {group.course_units.slice(0, 3).map((courseIdOrObj, index) => (
+                        {programEntry.course_units.slice(0, 3).map((courseIdOrObj, index) => (
                           <Badge
                             key={getCourseKey(courseIdOrObj) || index}
                             variant="outline"
@@ -315,21 +314,21 @@ export default function StudentGroups() {
                             {getCourseName(courseIdOrObj)}
                           </Badge>
                         ))}
-                        {group.course_units.length > 3 && (
+                        {programEntry.course_units.length > 3 && (
                           <Badge variant="outline" className="text-xs">
-                            +{group.course_units.length - 3} more
+                            +{programEntry.course_units.length - 3} more
                           </Badge>
                         )}
                       </div>
                     ) : (
-                      <span className="text-muted-foreground text-sm">No courses</span>
+                      <span className="text-muted-foreground text-sm">No subjects</span>
                     )}
                   </TableCell>
                   <TableCell>
                     <Badge
-                      variant={group.is_active ? "default" : "secondary"}
+                      variant={programEntry.is_active ? "default" : "secondary"}
                     >
-                      {group.is_active ? "Active" : "Inactive"}
+                      {programEntry.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -340,13 +339,13 @@ export default function StudentGroups() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-popover">
-                        <DropdownMenuItem onClick={() => openEditForm(group)}>
+                        <DropdownMenuItem onClick={() => openEditForm(programEntry)}>
                           <Edit className="h-4 w-4 mr-2" />
                           Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-destructive"
-                          onClick={() => handleDeleteGroup(group.id)}
+                          onClick={() => handleDeleteProgram(programEntry.id)}
                         >
                           <Trash className="h-4 w-4 mr-2" />
                           Delete
@@ -361,12 +360,30 @@ export default function StudentGroups() {
         )}
       </Card>
 
-      <StudentGroupForm
+      <ProgramForm
         open={formOpen}
         onOpenChange={closeForm}
-        onSubmit={editingGroup ? handleEditGroup : handleAddGroup}
-        group={editingGroup}
-        availableCourses={courses}
+        onSubmit={editingProgram ? handleEditProgram : handleAddProgram}
+        program={editingProgram}
+        availableCourses={subjects}
+      />
+
+      <ImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Programs"
+        description="Upload an Excel (.xlsx, .xls) or CSV (.csv) file to import programs. Required columns: Program Code, Program Name, Faculty, Batch, Semester, Student Size, Subjects (comma-separated subject codes, e.g., 'BIT1101, BIT1102, BIT1103')."
+        entityType="programs"
+        requiredColumns={['Program Code', 'Program Name', 'Faculty', 'Batch', 'Semester', 'Student Size', 'Subjects']}
+        onImport={async (data, onProgress) => {
+          try {
+            const response = await importAPI.importPrograms(data);
+            queryClient.invalidateQueries({ queryKey: ['programs'] });
+            return response;
+          } catch (error) {
+            throw error;
+          }
+        }}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-"""API routes for canonical course groups."""
+"""API routes for canonical subject groups."""
 
 from flask import Blueprint, request, jsonify
 from datetime import datetime
@@ -10,7 +10,7 @@ bp = Blueprint('canonical_groups', __name__, url_prefix='/api/canonical-groups')
 
 @bp.route('/', methods=['GET'])
 def get_canonical_groups():
-    """Get all canonical course groups"""
+    """Get all canonical subject groups"""
     try:
         db = get_db()
         groups = list(db.canonical_course_groups.find())
@@ -25,7 +25,7 @@ def get_canonical_groups():
 
 @bp.route('/<canonical_id>', methods=['GET'])
 def get_canonical_group(canonical_id: str):
-    """Get specific canonical course group"""
+    """Get specific canonical subject group"""
     try:
         db = get_db()
         group = db.canonical_course_groups.find_one({'canonical_id': canonical_id})
@@ -41,7 +41,7 @@ def get_canonical_group(canonical_id: str):
 
 @bp.route('/', methods=['POST'])
 def create_canonical_group():
-    """Create new canonical course group"""
+    """Create new canonical subject group"""
     try:
         data = request.get_json()
         
@@ -86,7 +86,7 @@ def create_canonical_group():
 
 @bp.route('/<canonical_id>', methods=['PUT'])
 def update_canonical_group(canonical_id: str):
-    """Update canonical course group"""
+    """Update canonical subject group"""
     try:
         data = request.get_json()
         
@@ -111,7 +111,7 @@ def update_canonical_group(canonical_id: str):
 
 @bp.route('/<canonical_id>', methods=['DELETE'])
 def delete_canonical_group(canonical_id: str):
-    """Delete canonical course group"""
+    """Delete canonical subject group"""
     try:
         db = get_db()
         result = db.canonical_course_groups.delete_one({'canonical_id': canonical_id})
@@ -125,9 +125,9 @@ def delete_canonical_group(canonical_id: str):
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/<canonical_id>/courses', methods=['GET'])
+@bp.route('/<canonical_id>/subjects', methods=['GET'])
 def get_courses_in_group(canonical_id: str):
-    """Get all courses in a canonical group"""
+    """Get all subjects in a canonical group"""
     try:
         db = get_db()
         group = db.canonical_course_groups.find_one({'canonical_id': canonical_id})
@@ -135,17 +135,17 @@ def get_courses_in_group(canonical_id: str):
         if not group:
             return jsonify({'error': 'Canonical group not found'}), 404
         
-        # Get course details for all course codes in the group
+        # Get subject details for all subject codes in the group
         course_codes = group.get('course_codes', [])
-        courses = list(db.course_units.find({'code': {'$in': course_codes}}))
+        subjects = list(db.course_units.find({'code': {'$in': course_codes}}))
         
-        for course in courses:
-            course['_id'] = str(course['_id'])
+        for subject in subjects:
+            subject['_id'] = str(subject['_id'])
         
         return jsonify({
             'canonical_id': canonical_id,
             'name': group.get('name'),
-            'courses': courses
+            'subjects': subjects
         }), 200
         
     except Exception as e:

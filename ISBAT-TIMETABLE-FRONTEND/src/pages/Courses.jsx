@@ -26,13 +26,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CourseForm } from "@/components/courses/CourseForm";
+import { SubjectForm } from "@/components/subjects/SubjectForm";
 import { toast } from "sonner";
 import { Button as UIButton } from "@/components/ui/button";
 import { coursesAPI } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
 
-export default function Courses() {
+export default function Subjects() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
@@ -43,27 +43,27 @@ export default function Courses() {
   const [sortBy, setSortBy] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
 
-  // Fetch courses from API
+  // Fetch subjects from API
   const { data, isLoading, error } = useQuery({
-    queryKey: ['courses'],
+    queryKey: ['subjects'],
     queryFn: async () => {
       const response = await coursesAPI.getAll();
-      return response.courses || [];
+      return response.subjects || [];
     },
   });
 
-  const courses = data || [];
+  const subjects = data || [];
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: coursesAPI.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
-      toast.success("Course created successfully");
+      queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      toast.success("Subject created successfully");
       setFormOpen(false);
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to create course");
+      toast.error(error.message || "Failed to create subject");
     },
   });
 
@@ -71,13 +71,13 @@ export default function Courses() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => coursesAPI.update(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
-      toast.success("Course updated successfully");
+      queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      toast.success("Subject updated successfully");
       setFormOpen(false);
       setEditingCourse(undefined);
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to update course");
+      toast.error(error.message || "Failed to update subject");
     },
   });
 
@@ -85,11 +85,11 @@ export default function Courses() {
   const deleteMutation = useMutation({
     mutationFn: coursesAPI.delete,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['courses'] });
-      toast.success("Course deleted successfully");
+      queryClient.invalidateQueries({ queryKey: ['subjects'] });
+      toast.success("Subject deleted successfully");
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to delete course");
+      toast.error(error.message || "Failed to delete subject");
     },
   });
 
@@ -104,24 +104,24 @@ export default function Courses() {
 
   // Get unique programs and semesters for filters
   const programs = useMemo(() => {
-    const unique = [...new Set(courses.map(c => c.program).filter(Boolean))];
+    const unique = [...new Set(subjects.map(c => c.program).filter(Boolean))];
     return unique.sort();
-  }, [courses]);
+  }, [subjects]);
 
   const semesters = useMemo(() => {
-    const unique = [...new Set(courses.map(c => c.semester).filter(Boolean))];
+    const unique = [...new Set(subjects.map(c => c.semester).filter(Boolean))];
     return unique.sort();
-  }, [courses]);
+  }, [subjects]);
 
   const filteredAndSortedCourses = useMemo(() => {
-    let filtered = courses.filter((course) => {
+    let filtered = subjects.filter((subject) => {
       const matchesSearch = 
-        course.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        course.code?.toLowerCase().includes(searchQuery.toLowerCase());
+        subject.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        subject.code?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesProgram =
-        programFilter === "all" || course.program === programFilter;
+        programFilter === "all" || subject.program === programFilter;
       const matchesSemester =
-        semesterFilter === "all" || course.semester === semesterFilter;
+        semesterFilter === "all" || subject.semester === semesterFilter;
       return matchesSearch && matchesProgram && matchesSemester;
     });
 
@@ -138,7 +138,7 @@ export default function Courses() {
     }
 
     return filtered;
-  }, [courses, searchQuery, programFilter, semesterFilter, sortBy, sortOrder]);
+  }, [subjects, searchQuery, programFilter, semesterFilter, sortBy, sortOrder]);
 
   const handleAddCourse = (courseData) => {
     // Transform form data to backend format
@@ -173,13 +173,13 @@ export default function Courses() {
   };
 
   const handleDeleteCourse = (id) => {
-    if (confirm("Are you sure you want to delete this course?")) {
+    if (confirm("Are you sure you want to delete this subject?")) {
       deleteMutation.mutate(id);
     }
   };
 
-  const openEditForm = (course) => {
-    setEditingCourse(course);
+  const openEditForm = (subject) => {
+    setEditingCourse(subject);
     setFormOpen(true);
   };
 
@@ -193,34 +193,33 @@ export default function Courses() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Courses</h1>
-          <p className="text-muted-foreground mt-1">Manage courses and their units</p>
+          <h1 className="text-3xl font-bold tracking-tight">Subjects</h1>
+          <p className="text-muted-foreground mt-1">Manage subjects and their units</p>
         </div>
         <div className="flex items-center gap-2">
           <UIButton 
             variant="outline" 
             onClick={() => navigate("/canonical-groups")}
           >
-            Course Groups
+            Subject Groups
           </UIButton>
-          <UIButton variant="outline">Download Template</UIButton>
           <UIButton variant="outline">Import</UIButton>
           <Button className="gap-2" onClick={() => setFormOpen(true)}>
             <Plus className="h-4 w-4" />
-            Add Course
+            Add Subject
           </Button>
         </div>
       </div>
 
-      {/* Info Card for Course Groups */}
+      {/* Info Card for Subject Groups */}
       <Card className="glass-card p-4 bg-primary/5 border-primary/20">
         <div className="flex items-center justify-between">
           <div className="flex items-start gap-3">
             <BookOpen className="h-5 w-5 text-primary mt-0.5" />
             <div>
-              <p className="text-sm font-medium">Course Groups</p>
+              <p className="text-sm font-medium">Subject Groups</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Group equivalent courses across programs (e.g., BIT1103, BCS1103 both teach "Programming in C")
+                Group equivalent subjects across programs (e.g., BIT1103, BCS1103 both teach "Programming in C")
               </p>
             </div>
           </div>
@@ -240,7 +239,7 @@ export default function Courses() {
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search courses..."
+              placeholder="Search subjects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
@@ -280,15 +279,15 @@ export default function Courses() {
         {isLoading ? (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="h-6 w-6 animate-spin" />
-            <span className="ml-2">Loading courses...</span>
+            <span className="ml-2">Loading subjects...</span>
           </div>
         ) : error ? (
           <div className="p-8 text-center text-destructive">
-            Error loading courses: {error.message}
+            Error loading subjects: {error.message}
           </div>
         ) : filteredAndSortedCourses.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
-            No courses found
+            No subjects found
           </div>
         ) : (
         <Table>
@@ -324,7 +323,7 @@ export default function Courses() {
                       }
                     }}
                 >
-                  Course Name
+                  Subject Name
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
@@ -336,30 +335,30 @@ export default function Courses() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredAndSortedCourses.map((course) => (
-              <TableRow key={course.id}>
-                  <TableCell className="font-medium">{course.code}</TableCell>
-                <TableCell className="font-medium">{course.name}</TableCell>
+            {filteredAndSortedCourses.map((subject) => (
+              <TableRow key={subject.id}>
+                  <TableCell className="font-medium">{subject.code}</TableCell>
+                <TableCell className="font-medium">{subject.name}</TableCell>
                 <TableCell>
-                    {course.program ? (
-                      <Badge variant="outline">{course.program}</Badge>
+                    {subject.program ? (
+                      <Badge variant="outline">{subject.program}</Badge>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                 </TableCell>
                 <TableCell>
-                    {course.semester ? (
-                      <Badge variant="secondary">{course.semester}</Badge>
+                    {subject.semester ? (
+                      <Badge variant="secondary">{subject.semester}</Badge>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell>{course.weekly_hours || 0} hrs</TableCell>
+                  <TableCell>{subject.weekly_hours || 0} hrs</TableCell>
                   <TableCell>
                       <Badge
-                      variant={course.preferred_room_type === "Lab" ? "default" : "secondary"}
+                      variant={subject.preferred_room_type === "Lab" ? "default" : "secondary"}
                       >
-                      {course.preferred_room_type || "Theory"}
+                      {subject.preferred_room_type || "Theory"}
                       </Badge>
                 </TableCell>
                 <TableCell className="text-right">
@@ -370,13 +369,13 @@ export default function Courses() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-popover">
-                      <DropdownMenuItem onClick={() => openEditForm(course)}>
+                      <DropdownMenuItem onClick={() => openEditForm(subject)}>
                         <Edit className="h-4 w-4 mr-2" />
                         Edit
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive"
-                        onClick={() => handleDeleteCourse(course.id)}
+                        onClick={() => handleDeleteCourse(subject.id)}
                       >
                         <Trash className="h-4 w-4 mr-2" />
                         Delete
@@ -391,11 +390,11 @@ export default function Courses() {
         )}
       </Card>
 
-      <CourseForm
+      <SubjectForm
         open={formOpen}
         onOpenChange={closeForm}
         onSubmit={editingCourse ? handleEditCourse : handleAddCourse}
-        course={editingCourse}
+        subject={editingCourse}
       />
     </div>
   );

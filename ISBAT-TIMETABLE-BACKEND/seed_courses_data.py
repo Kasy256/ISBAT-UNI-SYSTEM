@@ -1,4 +1,4 @@
-"""Seed course unit data for ISBAT Timetable System - UPDATED WITH CLIENT COURSE NAMES"""
+"""Seed course unit data for ISBAT Timetable System - UPDATED WITH CLIENT SUBJECT NAMES"""
 
 from typing import List, Dict
 
@@ -8,32 +8,32 @@ def get_all_courses() -> List[Dict]:
     Programs: BSCAIT, BCS
     All semesters S1-S6
     
-    Course Structure:
-    - All courses have standardized weekly_hours: 4
-    - preferred_term is MANDATORY and must be set for all courses (Term 1 or Term 2)
+    Subject Structure:
+    - All subjects have standardized weekly_hours: 4
+    - preferred_term is MANDATORY and must be set for all subjects (Term 1 or Term 2)
       * Frontend will require this field to be filled
       * Term splitting is based ONLY on preferred_term from database
-      * Canonical alignment may override preferred_term for merging equivalent courses
-    - preferred_room_type is REQUIRED and must be set for all courses:
-      * "Lab" for practical/lab courses
-      * "Theory" for theory courses
-      * Users can set this in the UI when creating/editing courses
+      * Canonical alignment may override preferred_term for merging equivalent subjects
+    - preferred_room_type is REQUIRED and must be set for all subjects:
+      * "Lab" for practical/lab subjects
+      * "Theory" for theory subjects
+      * Users can set this in the UI when creating/editing subjects
     - Theory/Practical pairs are linked via course_group field:
-      * Courses with same course_group must be in same term
+      * Subjects with same course_group must be in same term
       * They are considered as ONE course unit for term splitting
       * Example: Programming in C Theory + Practical = 1 course unit
     
     Returns:
-        List of course dictionaries ready for MongoDB insertion
+        List of subject dictionaries ready for MongoDB insertion
     """
-    courses = []
+    subjects = []
     
     # ========================================
-    # BSCAIT COURSES
+    # BSCAIT SUBJECTS
     # ========================================
     
     # Semester 1
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BIT1101',
             'code': 'BIT1101',
@@ -149,7 +149,7 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # Semester 2
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BIT1208',
             'code': 'BIT1208',
@@ -265,7 +265,7 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # Semester 3
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BIT2115',
             'code': 'BIT2115',
@@ -381,7 +381,7 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # Semester 4
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BIT2222',
             'code': 'BIT2222',
@@ -497,7 +497,7 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # Semester 5
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BIT3129',
             'code': 'BIT3129',
@@ -613,7 +613,7 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # Semester 6
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BIT3236',
             'code': 'BIT3236',
@@ -681,11 +681,11 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # ========================================
-    # BCS COURSES
+    # BCS SUBJECTS
     # ========================================
     
     # Semester 1
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BCS1101',
             'code': 'BCS1101',
@@ -785,7 +785,7 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # Semester 2
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BCS1207',
             'code': 'BCS1207',
@@ -885,7 +885,7 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # Semester 3
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BCS2113',
             'code': 'BCS2113',
@@ -985,7 +985,7 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # Semester 4
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BCS2219',
             'code': 'BCS2219',
@@ -1085,7 +1085,7 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # Semester 5
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BCS3125',
             'code': 'BCS3125',
@@ -1185,7 +1185,7 @@ def get_all_courses() -> List[Dict]:
     ])
     
     # Semester 6
-    courses.extend([
+    subjects.extend([
         {
             'id': 'BCS3231',
             'code': 'BCS3231',
@@ -1252,29 +1252,29 @@ def get_all_courses() -> List[Dict]:
         }
     ])
     
-    return courses
+    return subjects
 
 
 def seed_courses_to_db(db):
-    """Seed all course data to MongoDB database"""
+    """Seed all subject data to MongoDB database"""
     courses_data = get_all_courses()
     
-    # Clear existing courses
+    # Clear existing subjects
     db.course_units.delete_many({})
     
-    # Insert all courses
+    # Insert all subjects
     result = db.course_units.insert_many(courses_data)
     
-    print(f"✅ Successfully seeded {len(result.inserted_ids)} courses")
-    print(f"   - Lab courses: {sum(1 for c in courses_data if c.get('preferred_room_type') == 'Lab')}")
-    print(f"   - Theory courses: {sum(1 for c in courses_data if c.get('preferred_room_type') == 'Theory')}")
+    print(f"✅ Successfully seeded {len(result.inserted_ids)} subjects")
+    print(f"   - Lab subjects: {sum(1 for c in courses_data if c.get('preferred_room_type') == 'Lab')}")
+    print(f"   - Theory subjects: {sum(1 for c in courses_data if c.get('preferred_room_type') == 'Theory')}")
     print(f"   - Foundational: {sum(1 for c in courses_data if c['is_foundational'])}")
     
     return result
 
 
 def get_course_statistics():
-    """Get statistics about courses"""
+    """Get statistics about subjects"""
     courses_data = get_all_courses()
     
     stats = {
@@ -1294,9 +1294,9 @@ def get_course_statistics():
         'total_credits': sum(c['credits'] for c in courses_data)
     }
     
-    for course in courses_data:
-        sem = course['semester']
-        prog = course['program']
+    for subject in courses_data:
+        sem = subject['semester']
+        prog = subject['program']
         stats['by_semester'][sem] = stats['by_semester'].get(sem, 0) + 1
         stats['by_program'][prog] = stats['by_program'].get(prog, 0) + 1
     
@@ -1307,30 +1307,30 @@ if __name__ == '__main__':
     stats = get_course_statistics()
     
     print("\n" + "="*60)
-    print("ISBAT COURSE STATISTICS - UPDATED WITH CLIENT COURSE NAMES")
+    print("ISBAT SUBJECT STATISTICS - UPDATED WITH CLIENT SUBJECT NAMES")
     print("="*60)
-    print(f"\n📚 Total Courses: {stats['total_courses']}")
+    print(f"\n📚 Total Subjects: {stats['total_courses']}")
     
     print(f"\n📊 By Program:")
     for prog in sorted(stats['by_program'].keys()):
-        print(f"   - {prog}: {stats['by_program'][prog]} courses")
+        print(f"   - {prog}: {stats['by_program'][prog]} subjects")
     
     print(f"\n📊 By Semester:")
     for sem in sorted(stats['by_semester'].keys()):
-        print(f"   - {sem}: {stats['by_semester'][sem]} courses")
+        print(f"   - {sem}: {stats['by_semester'][sem]} subjects")
     
     print(f"\n🔬 By Type:")
     for type_name, count in stats['by_type'].items():
-        print(f"   - {type_name}: {count} courses")
+        print(f"   - {type_name}: {count} subjects")
     
     print(f"\n📈 By Difficulty:")
     for diff, count in stats['by_difficulty'].items():
-        print(f"   - {diff}: {count} courses")
+        print(f"   - {diff}: {count} subjects")
     
     print(f"\n⏰ Workload:")
     print(f"   - Total Weekly Hours: {stats['total_weekly_hours']}")
     print(f"   - Total Credits: {stats['total_credits']}")
     
     print("\n" + "="*60)
-    print("✅ Course data ready for seeding!")
+    print("✅ Subject data ready for seeding!")
     print("="*60 + "\n")

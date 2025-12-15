@@ -8,7 +8,7 @@ class Gene:
     """Single gene representing a session assignment"""
     session_id: str
     course_unit_id: str
-    student_group_id: str
+    program_id: str
     lecturer_id: str
     room_id: str
     time_slot: Dict
@@ -34,9 +34,9 @@ class Gene:
         return Assignment(
             variable_id=self.session_id,
             course_unit_id=self.course_unit_id,
-            student_group_id=self.student_group_id,
+            program_id=self.program_id,
             lecturer_id=self.lecturer_id,
-            room_id=self.room_id,
+            room_number=self.room_id,  # Gene.room_id contains room_number value
             time_slot=time_slot_obj,
             term=self.term,
             session_number=self.session_number
@@ -47,7 +47,7 @@ class Gene:
         return Gene(
             session_id=self.session_id,
             course_unit_id=self.course_unit_id,
-            student_group_id=self.student_group_id,
+            program_id=self.program_id,
             lecturer_id=self.lecturer_id,
             room_id=self.room_id,
             time_slot=self.time_slot.copy(),
@@ -112,9 +112,9 @@ class Chromosome:
             gene = Gene(
                 session_id=assignment.variable_id,
                 course_unit_id=assignment.course_unit_id,
-                student_group_id=assignment.student_group_id,
+                program_id=assignment.program_id,
                 lecturer_id=assignment.lecturer_id,
-                room_id=assignment.room_id,
+                room_id=assignment.room_number,
                 time_slot=assignment.time_slot.to_dict(),
                 term=assignment.term,
                 session_number=assignment.session_number
@@ -127,12 +127,12 @@ class Chromosome:
             generation=0
         )
     
-    def get_sessions_by_student_group(self) -> Dict[str, List[Gene]]:
-        """Group genes by student group"""
+    def get_sessions_by_program(self) -> Dict[str, List[Gene]]:
+        """Group genes by program"""
         from collections import defaultdict
         groups = defaultdict(list)
         for gene in self.genes:
-            groups[gene.student_group_id].append(gene)
+            groups[gene.program_id].append(gene)
         return dict(groups)
     
     def get_sessions_by_lecturer(self) -> Dict[str, List[Gene]]:

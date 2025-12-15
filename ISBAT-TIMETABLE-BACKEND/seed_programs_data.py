@@ -1,8 +1,8 @@
-"""Seed student group data for ISBAT Timetable System - UPDATED WITH REAL COURSES"""
+"""Seed program data for ISBAT Timetable System - UPDATED WITH REAL SUBJECTS"""
 
 from typing import List, Dict
 
-def get_all_student_groups():
+def get_all_programs():
 
     return [
 
@@ -485,42 +485,42 @@ def get_all_student_groups():
     ]
 
 
-def seed_student_groups_to_db(db):
-    """Seed all student group data to MongoDB database"""
-    groups_data = get_all_student_groups()
+def seed_programs_to_db(db):
+    """Seed all program data to MongoDB database"""
+    groups_data = get_all_programs()
     
-    # Clear existing student groups
-    db.student_groups.delete_many({})
+    # Clear existing programs
+    db.programs.delete_many({})
     
-    # Insert all student groups
-    result = db.student_groups.insert_many(groups_data)
+    # Insert all programs
+    result = db.programs.insert_many(groups_data)
     
-    print(f"✅ Successfully seeded {len(result.inserted_ids)} student groups")
+    print(f"✅ Successfully seeded {len(result.inserted_ids)} programs")
     print(f"   - BSCAIT-126 Batch: {sum(1 for g in groups_data if g.get('batch') == 'BSCAIT-126')} semesters")
     print(f"   - BCS-126 Batch: {sum(1 for g in groups_data if g.get('batch') == 'BCS-126')} semesters")
     print(f"   - BML-126 Batch: {sum(1 for g in groups_data if g.get('batch') == 'BML-126')} semesters")
     print(f"   - BSCE-126 Batch: {sum(1 for g in groups_data if g.get('batch') == 'BSCE-126')} semesters")
     print(f"   - Total Students: {sum(g.get('size', 0) for g in groups_data)}")
-    print(f"\n📚 Course Structure:")
+    print(f"\n📚 Subject Structure:")
     print(f"   - S1-S5: 5 course units per semester")
     print(f"   - S6: 4 course units (including Final Year Project)")
-    print(f"   - Shared courses across programs for efficient timetabling")
+    print(f"   - Shared subjects across programs for efficient timetabling")
     print(f"   - Note: Term splits will be handled by preprocessor")
     
     return result
 
 
 def get_shared_courses_summary():
-    """Get a summary of shared courses across programs"""
-    groups_data = get_all_student_groups()
+    """Get a summary of shared subjects across programs"""
+    groups_data = get_all_programs()
     
-    # Track course usage
+    # Track subject usage
     course_usage = {}
     
     for group in groups_data:
         # Handle new format where course_units can be dicts with 'code' and 'name'
         for course_item in group['course_units']:
-            # Extract course code from dict or use string directly
+            # Extract subject code from dict or use string directly
             if isinstance(course_item, dict):
                 course_code = course_item.get('code')
             else:
@@ -535,26 +535,26 @@ def get_shared_courses_summary():
                     'batch': group['batch']
                 })
     
-    # Find shared courses (used by multiple programs)
+    # Find shared subjects (used by multiple programs)
     shared_courses = {
-        course: usage 
-        for course, usage in course_usage.items() 
+        subject: usage 
+        for subject, usage in course_usage.items() 
         if len(set(u['program'] for u in usage)) > 1
     }
     
     return shared_courses
 
 
-def get_student_group_statistics():
-    """Get statistics about student groups"""
-    groups_data = get_all_student_groups()
+def get_program_statistics():
+    """Get statistics about programs"""
+    groups_data = get_all_programs()
     
     stats = {
         'total_groups': len(groups_data),
         'by_batch': {},
         'by_semester': {},
         'total_students': sum(g['size'] for g in groups_data),
-        'total_course_enrollments': sum(len(g['course_units']) for g in groups_data),  # Count individual courses
+        'total_course_enrollments': sum(len(g['course_units']) for g in groups_data),  # Count individual subjects
         'avg_group_size': sum(g['size'] for g in groups_data) / len(groups_data)
     }
     
@@ -571,13 +571,13 @@ def get_student_group_statistics():
 
 
 if __name__ == '__main__':
-    stats = get_student_group_statistics()
+    stats = get_program_statistics()
     shared = get_shared_courses_summary()
     
     print("\n" + "="*70)
-    print("ISBAT UNIVERSITY - STUDENT GROUP DATA (UPDATED WITH REAL COURSES)")
+    print("ISBAT UNIVERSITY - PROGRAM DATA (UPDATED WITH REAL SUBJECTS)")
     print("="*70)
-    print(f"\n👥 Total Student Groups: {stats['total_groups']} (semester groups)")
+    print(f"\n👥 Total Programs: {stats['total_groups']} (semester groups)")
     
     print(f"\n📚 By Batch:")
     for batch in sorted(stats['by_batch'].keys()):
@@ -585,7 +585,7 @@ if __name__ == '__main__':
         print(f"   - {batch}: {count} semesters")
     
     print(f"\n📊 By Program:")
-    groups_data = get_all_student_groups()
+    groups_data = get_all_programs()
     by_program = {}
     for group in groups_data:
         program = group.get('program')
@@ -597,23 +597,23 @@ if __name__ == '__main__':
     print(f"\n🎓 Student Statistics:")
     print(f"   - Total Students: {stats['total_students']}")
     print(f"   - Average Group Size: {stats['avg_group_size']:.1f}")
-    print(f"   - Total Course Enrollments: {stats['total_course_enrollments']}")
+    print(f"   - Total Subject Enrollments: {stats['total_course_enrollments']}")
     
-    print(f"\n🔗 Shared Courses (for efficient timetabling):")
-    print(f"   - Total shared courses: {len(shared)}")
+    print(f"\n🔗 Shared Subjects (for efficient timetabling):")
+    print(f"   - Total shared subjects: {len(shared)}")
     for course_code in sorted(shared.keys())[:10]:  # Show first 10
         programs = set(u['program'] for u in shared[course_code])
         print(f"   - {course_code}: Shared by {', '.join(sorted(programs))}")
     
-    print(f"\n📋 Course Structure:")
+    print(f"\n📋 Subject Structure:")
     print(f"   - Semesters 1-5: 5 course units each")
     print(f"   - Semester 6: 4 course units (including PRJ601 - Final Year Project)")
     print(f"   - All S6 groups include mandatory Final Year Project")
     
     print(f"\n⚙️  Preprocessing:")
     print(f"   - Term splitting: Handled by preprocessor")
-    print(f"   - Course distribution: Automatic based on constraints")
+    print(f"   - Subject distribution: Automatic based on constraints")
     
     print("\n" + "="*70)
-    print("✅ Student group data ready for seeding!")
+    print("✅ Program data ready for seeding!")
     print("="*70 + "\n")

@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
 import { Card as UICard } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -13,15 +14,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2, Calendar, AlertCircle } from "lucide-react";
+import { Loader2, Calendar, AlertCircle, Settings, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { timetableAPI } from "@/lib/api";
+import TimeSlots from "@/pages/TimeSlots";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function Timetables() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [timeSlotsOpen, setTimeSlotsOpen] = useState(false);
   const [term, setTerm] = useState("");
+  const [generationProgress, setGenerationProgress] = useState(null);
+  const progressIntervalRef = useRef(null);
 
   // Fetch timetables
   const { data, isLoading, error } = useQuery({
@@ -38,6 +49,12 @@ export default function Timetables() {
   const generateMutation = useMutation({
     mutationFn: timetableAPI.generate,
     onSuccess: (data) => {
+      // Stop polling
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      setGenerationProgress(null);
       queryClient.invalidateQueries({ queryKey: ['timetables'] });
       toast.success(`Term ${term} timetable generated successfully!`);
       setShowForm(false);
@@ -48,9 +65,57 @@ export default function Timetables() {
       }
     },
     onError: (error) => {
+      // Stop polling on error
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      setGenerationProgress(null);
       toast.error(error.message || "Failed to generate timetable");
     },
   });
+
+  // Poll for progress
+  useEffect(() => {
+    if (generateMutation.isPending && term) {
+      const pollProgress = async () => {
+        try {
+          const progress = await timetableAPI.getProgress(parseInt(term));
+          setGenerationProgress(progress);
+          
+          // Stop polling if completed or error
+          if (progress.status === 'completed' || progress.status === 'error') {
+            if (progressIntervalRef.current) {
+              clearInterval(progressIntervalRef.current);
+              progressIntervalRef.current = null;
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch progress:', error);
+        }
+      };
+
+      // Poll immediately, then every 1 second
+      pollProgress();
+      progressIntervalRef.current = setInterval(pollProgress, 1000);
+
+      return () => {
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+      };
+    } else {
+      // Clear interval if not pending
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+      if (!generateMutation.isPending) {
+        setGenerationProgress(null);
+      }
+    }
+  }, [generateMutation.isPending, term]);
 
   const handleGenerate = () => {
     if (!term) {
@@ -58,6 +123,9 @@ export default function Timetables() {
       return;
     }
 
+    // Reset progress
+    setGenerationProgress(null);
+    
     generateMutation.mutate({
       term: parseInt(term),
     });
@@ -82,10 +150,20 @@ export default function Timetables() {
             Generate and manage term-based timetables
           </p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Calendar className="h-4 w-4 mr-2" />
-          Generate New Timetable
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setTimeSlotsOpen(true)}
+            className="gap-2"
+          >
+            <Clock className="h-4 w-4" />
+            Manage Time Slots
+          </Button>
+          <Button onClick={() => setShowForm(true)}>
+            <Calendar className="h-4 w-4 mr-2" />
+            Generate New Timetable
+          </Button>
+        </div>
       </div>
 
       {showForm && (
@@ -108,6 +186,25 @@ export default function Timetables() {
               </p>
             </div>
 
+            {/* Progress Bar */}
+            {generateMutation.isPending && generationProgress && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{generationProgress.stage || 'Processing...'}</span>
+                  <span className="text-muted-foreground">
+                    {generationProgress.percentage >= 0 ? `${generationProgress.percentage}%` : '—'}
+                  </span>
+                </div>
+                <Progress 
+                  value={generationProgress.percentage >= 0 ? generationProgress.percentage : 0} 
+                  className="h-2"
+                />
+                {generationProgress.message && (
+                  <p className="text-xs text-muted-foreground">{generationProgress.message}</p>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
               <Button
                 disabled={!term || generateMutation.isPending}
@@ -127,7 +224,9 @@ export default function Timetables() {
                 onClick={() => {
                   setShowForm(false);
                   setTerm("");
+                  setGenerationProgress(null);
                 }}
+                disabled={generateMutation.isPending}
               >
                 Cancel
               </Button>
@@ -164,7 +263,7 @@ export default function Timetables() {
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {tt.statistics?.total_sessions || 0} sessions
-                      {tt.statistics?.student_groups && ` • ${tt.statistics.student_groups} student groups`}
+                      {tt.statistics?.programs && ` • ${tt.statistics.programs} programs`}
                     </div>
                     {tt.verification && (
                       <div className="text-xs text-muted-foreground mt-1">
@@ -200,6 +299,18 @@ export default function Timetables() {
           </div>
         )}
       </Card>
+
+      {/* Time Slots Management Dialog */}
+      <Dialog open={timeSlotsOpen} onOpenChange={setTimeSlotsOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manage Time Slots</DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            <TimeSlots />
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -2,66 +2,61 @@
           TERM 1 TIMETABLE - COMPREHENSIVE SUMMARY
 ======================================================================
 
-Generated: 2025-11-25 08:18:20
+Generated: 2025-12-15 10:53:53
 Term: Term 1
-Total Sessions: 62
+Total Sessions: 51
 
 ======================================================================
 SESSIONS BY SEMESTER
 ======================================================================
-  S1: 12 sessions
+  S1: 16 sessions
   S2: 12 sessions
-  S3: 10 sessions
-  S4: 10 sessions
-  S5: 10 sessions
-  S6: 8 sessions
+  S3: 4 sessions
+  S4: 6 sessions
+  S5: 13 sessions
 
 ======================================================================
 SESSIONS BY DAY
 ======================================================================
-  MON: 14 sessions
-  TUE: 12 sessions
-  WED: 11 sessions
-  THU: 12 sessions
-  FRI: 13 sessions
+  MON: 11 sessions
+  TUE: 10 sessions
+  WED: 10 sessions
+  THU: 10 sessions
+  FRI: 10 sessions
 
 ======================================================================
 TOP 10 COURSES (by sessions)
 ======================================================================
-  BIT1103 - Programming in C: 4 sessions
-  BIT1102 - Computer Organization and Architecture: 4 sessions
-  BIT1208 - Object Oriented Programming Using JAVA –: 4 sessions
-  BIT1210 - Data Structures and Algorithms: 4 sessions
-  BIT1211 - Computer Hardware and Operating Systems: 4 sessions
-  BIT2115 - Web Technology: 4 sessions
-  BIT2222 - Python Programming: 4 sessions
-  BIT2226 - DEVOPS: 4 sessions
-  BIT3129 - Programming in ASP.NET Core Using C#: 4 sessions
-  BIT3239 - Project: 4 sessions
+  BBA1103 - Business Communication: 2 sessions
+  BAF1103 - Communication Skills for Accountant: 2 sessions
+  BBAIB2221 - Global Strategic Management: 2 sessions
+  BBAIB3123 - Business Research Methods: 2 sessions
+  BAF2216 - Research Methods: 2 sessions
+  BBAIB3126 - Investment Management and Insurance: 2 sessions
+  BAF3123 - Investment and Insurance Management: 2 sessions
+  BBA3122 - Business Information System: 2 sessions
+  BAF2111 - Business Information System: 2 sessions
+  BBA2218 - Business Taxation: 2 sessions
 
 ======================================================================
 TOP 10 LECTURERS (by sessions)
 ======================================================================
-  NASURUDIN KIBWIKA BASHIR: 20 sessions
-  JUSTIN OPOLOT: 6 sessions
-  KENNETH KATO: 4 sessions
-  BRAVE AFRICANO: 4 sessions
-  DALLINGTON ASINGWIRE: 4 sessions
-  KUKUTLA ALEKYA: 4 sessions
-  HENRY MALE KENNETH: 4 sessions
-  KUMAR UMESH: 4 sessions
-  WANJIRU KAMAMI WILSON: 4 sessions
-  KUMAR PRADEEP: 4 sessions
+  James Kawuki: 8 sessions
+  Mindilla Robert: 8 sessions
+  Kenneth Kato: 8 sessions
+  Ainembabazi Pamela: 4 sessions
+  Peter Wakuma: 4 sessions
+  Dr. Amrutha: 4 sessions
+  Ronald Ssemanda: 4 sessions
+  Brave Africano: 4 sessions
+  Kukutla Alekya: 4 sessions
+  Mbabazize Mbabazi Peter: 3 sessions
 
 ======================================================================
 TOP 10 ROOMS (by usage)
 ======================================================================
-  601 (Lab): 32 sessions
-  206 (Lab): 9 sessions
-  602 (Theory): 8 sessions
-  B-201 (Theory): 6 sessions
-  406 (Lab): 5 sessions
-  300 (Theory): 1 sessions
-  305 (Theory): 1 sessions
+  700 (Theory): 36 sessions
+  601 (Lab): 12 sessions
+  305 (Theory): 3 sessions
 
 ======================================================================

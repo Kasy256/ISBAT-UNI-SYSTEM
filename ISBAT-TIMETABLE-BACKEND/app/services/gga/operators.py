@@ -1,4 +1,4 @@
-﻿"""Genetic operators for Guided Genetic Algorithm."""
+"""Genetic operators for Guided Genetic Algorithm."""
 
 from typing import Dict, List, Any, Tuple
 import random
@@ -9,7 +9,7 @@ class GeneticOperators:
     """Genetic operators for chromosome manipulation"""
     
     def __init__(self, constraint_checker=None, lecturers: Dict = None, rooms: Dict = None,
-                 course_units: Dict = None, student_groups: Dict = None, config: Dict[str, float] = None,
+                 course_units: Dict = None, programs: Dict = None, config: Dict[str, float] = None,
                  variable_pairs: Dict[str, List[str]] = None,
                  canonical_course_groups: Dict[str, Dict[int, List[str]]] = None):
         """
@@ -20,16 +20,16 @@ class GeneticOperators:
             lecturers: Dictionary of lecturers by ID
             rooms: Dictionary of rooms by ID
             course_units: Dictionary of course units by ID
-            student_groups: Dictionary of student groups by ID
+            programs: Dictionary of programs by ID
             config: Configuration with mutation and crossover rates
             variable_pairs: Theory/practical pairs (gene_id -> list of paired gene_ids)
-            canonical_course_groups: Canonical course groups (canonical_id -> {session_number: [gene_ids]})
+            canonical_course_groups: Canonical subject groups (canonical_id -> {session_number: [gene_ids]})
         """
         self.constraint_checker = constraint_checker
         self.lecturers = lecturers or {}
         self.rooms = rooms or {}
         self.course_units = course_units or {}
-        self.student_groups = student_groups or {}
+        self.programs = programs or {}
         self.variable_pairs = variable_pairs or {}
         self.canonical_course_groups = canonical_course_groups or {}
         
@@ -133,10 +133,10 @@ class GeneticOperators:
         # Simply return the chromosome - compaction will happen naturally through other mutations
         return chromosome
         
-        # Group by student group and day
+        # Group by program and day
         groups_by_day = {}
         for session in sessions:
-            group_id = session.get('student_group_id', '')
+            group_id = session.get('program_id', '')
             day = session.get('time_slot', {}).get('day', '')
             key = f"{group_id}_{day}"
             
@@ -152,8 +152,15 @@ class GeneticOperators:
             # Sort by time
             day_sessions.sort(key=lambda s: s['time_slot']['start'])
             
-            # Try to move sessions closer together
-            time_slots = ['SLOT_1', 'SLOT_2', 'SLOT_3', 'SLOT_4']
+            # Try to move sessions closer together (load periods from database)
+            from app.services.config_loader import get_time_slots_for_config
+            time_slots_config = get_time_slots_for_config(use_cache=True)
+            time_slots = [slot['period'] for slot in time_slots_config]
+            
+            if not time_slots:
+                # Fallback if database is empty (should not happen in production)
+                time_slots = ['SLOT_1', 'SLOT_2', 'SLOT_3', 'SLOT_4']
+            
             for i, session in enumerate(day_sessions):
                 if i < len(time_slots):
                     session['time_slot']['period'] = time_slots[i]
@@ -246,9 +253,17 @@ class GeneticOperators:
                     moved += 1
     
     def _mutate_time_slot(self, session: Dict[str, Any], chromosome: Dict[str, Any]):
-        """Mutate time slot of a session"""
-        days = ['MON', 'TUE', 'WED', 'THU', 'FRI']
-        periods = ['SLOT_1', 'SLOT_2', 'SLOT_3', 'SLOT_4']
+        """Mutate time slot of a session (loads periods from database)"""
+        from app.services.config_loader import get_time_slots_for_config
+        from app.config import Config
+        
+        days = Config.DAYS  # Use Config.DAYS instead of hardcoded
+        time_slots_config = get_time_slots_for_config(use_cache=True)
+        periods = [slot['period'] for slot in time_slots_config]  # Load from database
+        
+        if not periods:
+            # Fallback if database is empty (should not happen in production)
+            periods = ['SLOT_1', 'SLOT_2', 'SLOT_3', 'SLOT_4']
         
         current_day = session.get('time_slot', {}).get('day', '')
         current_period = session.get('time_slot', {}).get('period', '')
@@ -298,7 +313,8 @@ class GeneticOperators:
         
         course_id = gene.course_unit_id
         
-        # Get qualified lecturers
+        # Get qualified lecturers (using canonical matching for subject groups)
+        from app.services.canonical_courses import is_canonical_match
         qualified = []
         for lec_id, lecturer in self.lecturers.items():
             # Handle both dict and object formats
@@ -307,7 +323,7 @@ class GeneticOperators:
             else:
                 specializations = lecturer.get('specializations', [])
             
-            if course_id in specializations:
+            if is_canonical_match(course_id, specializations):
                 qualified.append(lec_id)
         
         if qualified:
@@ -409,18 +425,18 @@ class GeneticOperators:
     
     def _is_room_compatible_gene(self, gene, room: Dict[str, Any]) -> bool:
         """Check if room is compatible with gene requirements"""
-        # Get student group info
-        student_group = self.student_groups.get(gene.student_group_id, {})
-        if hasattr(student_group, 'size'):
-            group_size = student_group.size
+        # Get program info
+        program = self.programs.get(gene.program_id, {})
+        if hasattr(program, 'size'):
+            group_size = program.size
         else:
-            group_size = student_group.get('size', 0) if isinstance(student_group, dict) else 0
+            group_size = program.get('size', 0) if isinstance(program, dict) else 0
         
         # Check capacity
         if room.get('capacity', 0) < group_size:
             return False
         
-        # Get course info
+        # Get subject info
         course_unit = self.course_units.get(gene.course_unit_id, {})
         if hasattr(course_unit, 'preferred_room_type'):
             preferred_room_type = course_unit.preferred_room_type
@@ -441,7 +457,7 @@ class GeneticOperators:
     def _is_room_compatible(session: Dict[str, Any], room: Dict[str, Any]) -> bool:
         """Check if room is compatible with session requirements (legacy for dict-based)"""
         # Check capacity
-        group_size = session.get('student_group_size', 0)
+        group_size = session.get('program_size', 0)
         if room.get('capacity', 0) < group_size:
             return False
         
@@ -458,20 +474,32 @@ class GeneticOperators:
     
     @staticmethod
     def _update_time_slot_times(session: Dict[str, Any], period: str):
-        """Update start and end times based on period"""
-        time_mappings = {
-            'SLOT_1': {'start': '09:00', 'end': '11:00', 'is_afternoon': False},
-            'SLOT_2': {'start': '11:00', 'end': '13:00', 'is_afternoon': False},
-            'SLOT_3': {'start': '14:00', 'end': '16:00', 'is_afternoon': True},
-            'SLOT_4': {'start': '16:00', 'end': '18:00', 'is_afternoon': True}
-        }
+        """Update start and end times based on period (loads from database)"""
+        from app.services.config_loader import get_time_slots_for_config
         
+        # Load time slots from database (uses cache)
+        time_slots_config = get_time_slots_for_config(use_cache=True)
+        
+        # Build mapping from database time slots
+        time_mappings = {}
+        for slot in time_slots_config:
+            time_mappings[slot['period']] = {
+                'start': slot['start'],
+                'end': slot['end'],
+                'is_afternoon': slot.get('is_afternoon', False)
+            }
+        
+        # If period not found in database, fallback to empty (will be caught by constraint checker)
         if period in time_mappings:
             session['time_slot'].update(time_mappings[period])
+        else:
+            # Log warning if period not found
+            import warnings
+            warnings.warn(f"Time slot period '{period}' not found in database. Available periods: {list(time_mappings.keys())}")
 
 
 def mutate_chromosome(chromosome, constraint_checker=None, lecturers: Dict = None,
-                     rooms: Dict = None, course_units: Dict = None, student_groups: Dict = None,
+                     rooms: Dict = None, course_units: Dict = None, programs: Dict = None,
                      config: Dict[str, float] = None,
                      problem_areas: List[Dict[str, Any]] = None):
     """
@@ -483,20 +511,20 @@ def mutate_chromosome(chromosome, constraint_checker=None, lecturers: Dict = Non
         lecturers: Dictionary of lecturers
         rooms: Dictionary of rooms
         course_units: Dictionary of course units
-        student_groups: Dictionary of student groups
+        programs: Dictionary of programs
         config: Optional configuration
         problem_areas: Optional problem areas for guided mutation
         
     Returns:
         Mutated chromosome
     """
-    operators = GeneticOperators(constraint_checker, lecturers, rooms, course_units, student_groups, config)
+    operators = GeneticOperators(constraint_checker, lecturers, rooms, course_units, programs, config)
     return operators.mutate(chromosome, problem_areas)
 
 
 def crossover_chromosomes(parent1, parent2, strategy: str = 'uniform',
                          constraint_checker=None, lecturers: Dict = None, rooms: Dict = None,
-                         course_units: Dict = None, student_groups: Dict = None,
+                         course_units: Dict = None, programs: Dict = None,
                          config: Dict[str, float] = None):
     """
     Convenience function to perform crossover
@@ -509,11 +537,11 @@ def crossover_chromosomes(parent1, parent2, strategy: str = 'uniform',
         lecturers: Dictionary of lecturers
         rooms: Dictionary of rooms
         course_units: Dictionary of course units
-        student_groups: Dictionary of student groups
+        programs: Dictionary of programs
         config: Optional configuration
         
     Returns:
         Tuple of two offspring
     """
-    operators = GeneticOperators(constraint_checker, lecturers, rooms, course_units, student_groups, config)
+    operators = GeneticOperators(constraint_checker, lecturers, rooms, course_units, programs, config)
     return operators.crossover(parent1, parent2, strategy)

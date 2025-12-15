@@ -27,14 +27,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CanonicalGroupForm } from "@/components/canonical-groups/CanonicalGroupForm";
+import ImportDialog from "@/components/ImportDialog";
 import { toast } from "sonner";
 import { Button as UIButton } from "@/components/ui/button";
-import { canonicalGroupsAPI, coursesAPI } from "@/lib/api";
+import { canonicalGroupsAPI, subjectsAPI, importAPI } from "@/lib/api";
 
 export default function CanonicalGroups() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState(undefined);
   const [sortBy, setSortBy] = useState(null);
   const [sortOrder, setSortOrder] = useState("asc");
@@ -48,28 +50,28 @@ export default function CanonicalGroups() {
     },
   });
 
-  // Fetch courses for reference
+  // Fetch subjects for reference
   const { data: coursesData } = useQuery({
-    queryKey: ['courses'],
+    queryKey: ['subjects'],
     queryFn: async () => {
-      const response = await coursesAPI.getAll();
-      return response.courses || [];
+      const response = await subjectsAPI.getAll();
+      return response.subjects || [];
     },
   });
 
   const groups = data || [];
-  const courses = coursesData || [];
+  const subjects = coursesData || [];
 
   // Create mutation
   const createMutation = useMutation({
     mutationFn: canonicalGroupsAPI.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['canonical-groups'] });
-      toast.success("Course group created successfully");
+      toast.success("Subject group created successfully");
       setFormOpen(false);
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to create course group");
+      toast.error(error.message || "Failed to create subject group");
     },
   });
 
@@ -78,12 +80,12 @@ export default function CanonicalGroups() {
     mutationFn: ({ id, data }) => canonicalGroupsAPI.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['canonical-groups'] });
-      toast.success("Course group updated successfully");
+      toast.success("Subject group updated successfully");
       setFormOpen(false);
       setEditingGroup(undefined);
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to update course group");
+      toast.error(error.message || "Failed to update subject group");
     },
   });
 
@@ -92,10 +94,10 @@ export default function CanonicalGroups() {
     mutationFn: canonicalGroupsAPI.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['canonical-groups'] });
-      toast.success("Course group deleted successfully");
+      toast.success("Subject group deleted successfully");
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to delete course group");
+      toast.error(error.message || "Failed to delete subject group");
     },
   });
 
@@ -145,7 +147,7 @@ export default function CanonicalGroups() {
   };
 
   const handleDeleteGroup = (canonicalId) => {
-    if (confirm("Are you sure you want to delete this course group?")) {
+    if (confirm("Are you sure you want to delete this subject group?")) {
       deleteMutation.mutate(canonicalId);
     }
   };
@@ -161,8 +163,8 @@ export default function CanonicalGroups() {
   };
 
   const getCourseName = (courseCode) => {
-    const course = courses.find(c => c.code === courseCode);
-    return course ? `${course.code} - ${course.name}` : courseCode;
+    const subject = subjects.find(c => c.code === courseCode);
+    return subject ? `${subject.code} - ${subject.name}` : courseCode;
   };
 
   return (
@@ -170,15 +172,16 @@ export default function CanonicalGroups() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Course Groups</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Subject Groups</h1>
           <p className="text-muted-foreground mt-1">
-            Group equivalent courses across different programs
+            Group equivalent subjects across different programs
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <UIButton variant="outline" onClick={() => setImportOpen(true)}>Import</UIButton>
           <Button className="gap-2" onClick={() => setFormOpen(true)}>
             <Plus className="h-4 w-4" />
-            Add Course Group
+            Add Subject Group
           </Button>
         </div>
       </div>
@@ -188,10 +191,10 @@ export default function CanonicalGroups() {
         <div className="flex items-start gap-3">
           <BookOpen className="h-5 w-5 text-primary mt-0.5" />
           <div>
-            <p className="text-sm font-medium">What are Course Groups?</p>
+            <p className="text-sm font-medium">What are Subject Groups?</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Course groups link equivalent courses across programs. For example, "Programming in C" 
-              might be taught as BIT1103, BCS1103, and BBA1103 in different programs, but they're the same course.
+              Subject groups link equivalent subjects across programs. For example, "Programming in C" 
+              might be taught as BIT1103, BCS1103, and BBA1103 in different programs, but they're the same subject.
               This helps with lecturer assignment and resource sharing.
             </p>
           </div>
@@ -203,7 +206,7 @@ export default function CanonicalGroups() {
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by group ID, name, or course codes..."
+            placeholder="Search by group ID, name, or subject codes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -216,15 +219,15 @@ export default function CanonicalGroups() {
         {isLoading ? (
           <div className="flex items-center justify-center p-8">
             <Loader2 className="h-6 w-6 animate-spin" />
-            <span className="ml-2">Loading course groups...</span>
+            <span className="ml-2">Loading subject groups...</span>
           </div>
         ) : error ? (
           <div className="p-8 text-center text-destructive">
-            Error loading course groups: {error.message}
+            Error loading subject groups: {error.message}
           </div>
         ) : filteredAndSortedGroups.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
-            No course groups found
+            No subject groups found
           </div>
         ) : (
           <Table>
@@ -241,7 +244,7 @@ export default function CanonicalGroups() {
                   </Button>
                 </TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Course Codes</TableHead>
+                <TableHead>Subject Codes</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -267,7 +270,7 @@ export default function CanonicalGroups() {
                         ))}
                       </div>
                     ) : (
-                      <span className="text-muted-foreground text-sm">No courses</span>
+                      <span className="text-muted-foreground text-sm">No subjects</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -313,7 +316,25 @@ export default function CanonicalGroups() {
         onOpenChange={closeForm}
         onSubmit={editingGroup ? handleEditGroup : handleAddGroup}
         group={editingGroup}
-        availableCourses={courses}
+        availableCourses={subjects}
+      />
+
+      <ImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Subject Groups"
+        description="Upload an Excel (.xlsx, .xls) or CSV (.csv) file to import subject groups. Required columns: Group Id, Subject Name, Subject Codes (comma-separated subject codes, e.g., 'BIT1101, BIT1102, BIT1103'), Description."
+        entityType="canonical-groups"
+        requiredColumns={['Group Id', 'Subject Name', 'Subject Codes', 'Description']}
+        onImport={async (data, onProgress) => {
+          try {
+            const response = await importAPI.importCanonicalGroups(data);
+            queryClient.invalidateQueries({ queryKey: ['canonical-groups'] });
+            return response;
+          } catch (error) {
+            throw error;
+          }
+        }}
       />
     </div>
   );

@@ -1,18 +1,26 @@
-﻿"""Student group management routes."""
+﻿"""Program management routes."""
 
 from flask import Blueprint, request, jsonify
 from app import get_db
-from app.models.student import StudentGroup
+from app.models.program import Program
 from app.middleware.auth import require_auth, require_role
 
-bp = Blueprint('students', __name__, url_prefix='/api/students')
+bp = Blueprint('programs', __name__, url_prefix='/api/programs')
+
+
+def normalize_program_payload(payload: dict) -> dict:
+    """Ensure payload uses the canonical program field name."""
+    normalized = dict(payload or {})
+    if 'program' not in normalized and 'program_name' in normalized:
+        normalized['program'] = normalized['program_name']
+    return normalized
 
 
 @bp.route('/', methods=['GET'])
 @require_auth
-def get_student_groups():
+def get_programs():
     """
-    Get all student groups
+    Get all programs
     
     Query parameters:
     - program: Filter by program (BSCAIT, BSCSE, etc.)
@@ -27,9 +35,9 @@ def get_student_groups():
         # Build query from parameters
         query = {}
         
-        program = request.args.get('program')
-        if program:
-            query['program'] = program
+        program_name = request.args.get('program_name') or request.args.get('program')
+        if program_name:
+            query['program'] = program_name
         
         batch = request.args.get('batch')
         if batch:
@@ -47,36 +55,36 @@ def get_student_groups():
         if active is not None:
             query['is_active'] = active.lower() == 'true'
         
-        groups = list(db.student_groups.find(query))
+        programs = list(db.programs.find(query))
         
-        for group in groups:
-            group['_id'] = str(group['_id'])
+        for program in programs:
+            program['_id'] = str(program['_id'])
         
         return jsonify({
             'success': True,
-            'count': len(groups),
-            'student_groups': groups
+            'count': len(programs),
+            'programs': programs
         }), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/<group_id>', methods=['GET'])
+@bp.route('/<program_id>', methods=['GET'])
 @require_auth
-def get_student_group(group_id):
-    """Get specific student group by ID"""
+def get_program(program_id):
+    """Get specific program by ID"""
     try:
         db = get_db()
-        group = db.student_groups.find_one({'id': group_id})
+        group = db.programs.find_one({'id': program_id})
         
         if not group:
-            return jsonify({'error': 'Student group not found'}), 404
+            return jsonify({'error': 'Program not found'}), 404
         
         group['_id'] = str(group['_id'])
         return jsonify({
             'success': True,
-            'student_group': group
+            'program': group
         }), 200
         
     except Exception as e:
@@ -85,9 +93,9 @@ def get_student_group(group_id):
 
 @bp.route('/', methods=['POST'])
 @require_role('scheduler')
-def create_student_group():
+def create_program():
     """
-    Create new student group
+    Create new program
     
     Request body:
     {
@@ -101,7 +109,7 @@ def create_student_group():
     }
     """
     try:
-        data = request.get_json()
+        data = normalize_program_payload(request.get_json())
         
         # Validate required fields
         required = ['id', 'batch', 'program', 'semester', 'term', 'size']
@@ -111,7 +119,7 @@ def create_student_group():
         
         # Validate size
         if data['size'] <= 0:
-            return jsonify({'error': 'Group size must be greater than 0'}), 400
+                return jsonify({'error': 'Student size must be greater than 0'}), 400
         
         # Validate semester
         valid_semesters = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6']
@@ -127,20 +135,20 @@ def create_student_group():
                 'error': f'Invalid term. Must be one of: {", ".join(valid_terms)}'
             }), 400
         
-        group = StudentGroup.from_dict(data)
+        group = Program.from_dict(data)
         
         db = get_db()
         
         # Check if ID already exists
-        existing = db.student_groups.find_one({'id': group.id})
+        existing = db.programs.find_one({'id': group.id})
         if existing:
-            return jsonify({'error': 'Student group ID already exists'}), 409
+            return jsonify({'error': 'Program ID already exists'}), 409
         
-        result = db.student_groups.insert_one(group.to_dict())
+        result = db.programs.insert_one(group.to_dict())
         
         return jsonify({
             'success': True,
-            'message': 'Student group created successfully',
+            'message': 'Program created successfully',
             'id': group.id,
             '_id': str(result.inserted_id)
         }), 201
@@ -149,20 +157,20 @@ def create_student_group():
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/<group_id>', methods=['PUT'])
+@bp.route('/<program_id>', methods=['PUT'])
 @require_role('scheduler')
-def update_student_group(group_id):
+def update_program(program_id):
     """
-    Update student group
+    Update program
     
     Request body: Same as create, all fields optional
     """
     try:
-        data = request.get_json()
+        data = normalize_program_payload(request.get_json())
         
         # Validate size if provided
         if 'size' in data and data['size'] <= 0:
-            return jsonify({'error': 'Group size must be greater than 0'}), 400
+            return jsonify({'error': 'Student size must be greater than 0'}), 400
         
         # Validate semester if provided
         if 'semester' in data:
@@ -181,37 +189,37 @@ def update_student_group(group_id):
                 }), 400
         
         db = get_db()
-        result = db.student_groups.update_one(
-            {'id': group_id},
+        result = db.programs.update_one(
+            {'id': program_id},
             {'$set': data}
         )
         
         if result.matched_count == 0:
-            return jsonify({'error': 'Student group not found'}), 404
+            return jsonify({'error': 'Program not found'}), 404
         
         return jsonify({
             'success': True,
-            'message': 'Student group updated successfully'
+            'message': 'Program updated successfully'
         }), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/<group_id>', methods=['DELETE'])
+@bp.route('/<program_id>', methods=['DELETE'])
 @require_role('admin')
-def delete_student_group(group_id):
-    """Delete student group (admin only)"""
+def delete_program(program_id):
+    """Delete program (admin only)"""
     try:
         db = get_db()
-        result = db.student_groups.delete_one({'id': group_id})
+        result = db.programs.delete_one({'id': program_id})
         
         if result.deleted_count == 0:
-            return jsonify({'error': 'Student group not found'}), 404
+            return jsonify({'error': 'Program not found'}), 404
         
         return jsonify({
             'success': True,
-            'message': 'Student group deleted successfully'
+            'message': 'Program deleted successfully'
         }), 200
         
     except Exception as e:
@@ -220,13 +228,13 @@ def delete_student_group(group_id):
 
 @bp.route('/bulk', methods=['POST'])
 @require_role('scheduler')
-def bulk_create_student_groups():
+def bulk_create_programs():
     """
-    Bulk create student groups
+    Bulk create programs
     
     Request body:
     {
-        "student_groups": [
+        "programs": [
             {...group data...},
             {...group data...}
         ]
@@ -234,38 +242,41 @@ def bulk_create_student_groups():
     """
     try:
         data = request.get_json()
-        groups_data = data.get('student_groups', [])
+        groups_data = data.get('programs', [])
         
         if not groups_data:
-            return jsonify({'error': 'No student groups provided'}), 400
+            return jsonify({'error': 'No programs provided'}), 400
         
         # Validate all groups
         for idx, group_data in enumerate(groups_data):
             required = ['id', 'batch', 'program', 'semester', 'term', 'size']
             for field in required:
                 if field not in group_data:
+                    if field == 'program' and 'program_name' in group_data:
+                        continue
                     return jsonify({
-                        'error': f'Group {idx}: Missing required field: {field}'
+                        'error': f'Program {idx}: Missing required field: {field}'
                     }), 400
         
         db = get_db()
-        groups = [StudentGroup.from_dict(g).to_dict() for g in groups_data]
+        normalized_groups = [normalize_program_payload(g) for g in groups_data]
+        groups = [Program.from_dict(g).to_dict() for g in normalized_groups]
         
         # Check for duplicate IDs in database
         existing_ids = [g['id'] for g in groups]
-        duplicates = list(db.student_groups.find({'id': {'$in': existing_ids}}))
+        duplicates = list(db.programs.find({'id': {'$in': existing_ids}}))
         
         if duplicates:
             dup_ids = [d['id'] for d in duplicates]
             return jsonify({
-                'error': f'Duplicate student group IDs found: {", ".join(dup_ids)}'
+                'error': f'Duplicate program IDs found: {", ".join(dup_ids)}'
             }), 409
         
-        result = db.student_groups.insert_many(groups)
+        result = db.programs.insert_many(groups)
         
         return jsonify({
             'success': True,
-            'message': f'{len(result.inserted_ids)} student groups created successfully',
+            'message': f'{len(result.inserted_ids)} programs created successfully',
             'count': len(result.inserted_ids)
         }), 201
         
@@ -273,11 +284,11 @@ def bulk_create_student_groups():
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/<group_id>/courses', methods=['POST'])
+@bp.route('/<program_id>/subjects', methods=['POST'])
 @require_role('scheduler')
-def add_courses_to_group(group_id):
+def add_courses_to_program(program_id):
     """
-    Add courses to student group
+    Add subjects to program
     
     Request body:
     {
@@ -292,40 +303,40 @@ def add_courses_to_group(group_id):
             return jsonify({'error': 'No course units provided'}), 400
         
         db = get_db()
-        result = db.student_groups.update_one(
-            {'id': group_id},
+        result = db.programs.update_one(
+            {'id': program_id},
             {'$addToSet': {'course_units': {'$each': course_units}}}
         )
         
         if result.matched_count == 0:
-            return jsonify({'error': 'Student group not found'}), 404
+            return jsonify({'error': 'Program not found'}), 404
         
         return jsonify({
             'success': True,
-            'message': f'Added {len(course_units)} course(s) to group'
+            'message': f'Added {len(course_units)} subject(s) to program'
         }), 200
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-@bp.route('/<group_id>/courses/<course_id>', methods=['DELETE'])
+@bp.route('/<program_id>/subjects/<course_id>', methods=['DELETE'])
 @require_role('scheduler')
-def remove_course_from_group(group_id, course_id):
-    """Remove course from student group"""
+def remove_course_from_program(program_id, course_id):
+    """Remove subject from program"""
     try:
         db = get_db()
-        result = db.student_groups.update_one(
-            {'id': group_id},
+        result = db.programs.update_one(
+            {'id': program_id},
             {'$pull': {'course_units': course_id}}
         )
         
         if result.matched_count == 0:
-            return jsonify({'error': 'Student group not found'}), 404
+            return jsonify({'error': 'Program not found'}), 404
         
         return jsonify({
             'success': True,
-            'message': 'Course removed from group'
+            'message': 'Subject removed from program'
         }), 200
         
     except Exception as e:
@@ -334,9 +345,9 @@ def remove_course_from_group(group_id, course_id):
 
 @bp.route('/search', methods=['POST'])
 @require_auth
-def search_student_groups():
+def search_programs():
     """
-    Advanced student group search
+    Advanced program search
     
     Request body:
     {
@@ -348,13 +359,14 @@ def search_student_groups():
     }
     """
     try:
-        criteria = request.get_json()
+        criteria = request.get_json() or {}
         
         db = get_db()
         query = {}
         
-        if 'program' in criteria:
-            query['program'] = criteria['program']
+        program_filter = criteria.get('program') or criteria.get('program_name')
+        if program_filter:
+            query['program'] = program_filter
         
         if 'batch' in criteria:
             query['batch'] = criteria['batch']
@@ -378,15 +390,15 @@ def search_student_groups():
         if 'is_active' in criteria:
             query['is_active'] = criteria['is_active']
         
-        groups = list(db.student_groups.find(query))
+        programs = list(db.programs.find(query))
         
-        for group in groups:
-            group['_id'] = str(group['_id'])
+        for program in programs:
+            program['_id'] = str(program['_id'])
         
         return jsonify({
             'success': True,
-            'count': len(groups),
-            'student_groups': groups
+            'count': len(programs),
+            'programs': programs
         }), 200
         
     except Exception as e:
@@ -395,16 +407,16 @@ def search_student_groups():
 
 @bp.route('/statistics', methods=['GET'])
 @require_auth
-def get_student_statistics():
-    """Get student group statistics"""
+def get_program_statistics():
+    """Get program statistics"""
     try:
         db = get_db()
         
-        # Total groups
-        total_groups = db.student_groups.count_documents({})
+        # Total programs
+        total_programs = db.programs.count_documents({})
         
         # Groups by program
-        by_program = list(db.student_groups.aggregate([
+        by_program = list(db.programs.aggregate([
             {'$group': {
                 '_id': '$program',
                 'count': {'$sum': 1},
@@ -414,7 +426,7 @@ def get_student_statistics():
         ]))
         
         # Groups by semester
-        by_semester = list(db.student_groups.aggregate([
+        by_semester = list(db.programs.aggregate([
             {'$group': {
                 '_id': '$semester',
                 'count': {'$sum': 1},
@@ -423,7 +435,7 @@ def get_student_statistics():
         ]))
         
         # Size statistics
-        size_stats = list(db.student_groups.aggregate([
+        size_stats = list(db.programs.aggregate([
             {'$group': {
                 '_id': None,
                 'min_size': {'$min': '$size'},
@@ -434,13 +446,14 @@ def get_student_statistics():
         ]))
         
         # Active vs inactive
-        active_count = db.student_groups.count_documents({'is_active': True})
-        inactive_count = db.student_groups.count_documents({'is_active': False})
+        active_count = db.programs.count_documents({'is_active': True})
+        inactive_count = db.programs.count_documents({'is_active': False})
         
         return jsonify({
             'success': True,
             'statistics': {
-                'total_groups': total_groups,
+                'total_programs': total_programs,
+                'total_groups': total_programs,
                 'active': active_count,
                 'inactive': inactive_count,
                 'by_program': by_program,

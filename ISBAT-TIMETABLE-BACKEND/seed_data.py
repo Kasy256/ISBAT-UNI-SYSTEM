@@ -13,8 +13,9 @@ import uuid
 # Import modular seed functions
 from seed_lecturers_data import seed_lecturers_to_db
 from seed_courses_data import seed_courses_to_db
-from seed_student_groups_data import seed_student_groups_to_db
+from seed_programs_data import seed_programs_to_db
 from seed_rooms_data import seed_rooms_to_db
+from seed_config_data import seed_config_to_db
 
 load_dotenv()
 
@@ -43,7 +44,7 @@ def seed_all():
     db.lecturers.delete_many({})
     db.rooms.delete_many({})
     db.course_units.delete_many({})
-    db.student_groups.delete_many({})
+    db.programs.delete_many({})
     db.users.delete_many({})
     db.schedules.delete_many({})
     print("All collections cleared\n")
@@ -95,7 +96,7 @@ def seed_all():
     # Seed all data using modular functions
     try:
         print("-" * 70)
-        print("SEEDING COURSES...")
+        print("SEEDING SUBJECTS...")
         print("-" * 70)
         seed_courses_to_db(db)
         
@@ -110,9 +111,14 @@ def seed_all():
         seed_rooms_to_db(db)
         
         print("\n" + "-" * 70)
-        print("SEEDING STUDENT GROUPS...")
+        print("SEEDING PROGRAMS...")
         print("-" * 70)
-        seed_student_groups_to_db(db)
+        seed_programs_to_db(db)
+        
+        print("\n" + "-" * 70)
+        print("SEEDING CONFIG DATA (Room Specializations & Time Slots)...")
+        print("-" * 70)
+        seed_config_to_db(db)
         
         print("\n" + "="*70)
         print(" "*20 + "SEEDING COMPLETE!")
@@ -143,15 +149,15 @@ def display_summary(db):
     lecturer_count = db.lecturers.count_documents({})
     course_count = db.course_units.count_documents({})
     room_count = db.rooms.count_documents({})
-    student_group_count = db.student_groups.count_documents({})
+    program_count = db.programs.count_documents({})
     user_count = db.users.count_documents({})
     
     print(f"Collection Counts:")
     print(f"   Users: {user_count}")
     print(f"   Lecturers: {lecturer_count}")
-    print(f"   Courses: {course_count}")
+    print(f"   Subjects: {course_count}")
     print(f"   Rooms: {room_count}")
-    print(f"   Student Groups: {student_group_count}")
+    print(f"   Programs: {program_count}")
     
     # Lecturers by role
     full_time = db.lecturers.count_documents({'role': 'Full-Time'})

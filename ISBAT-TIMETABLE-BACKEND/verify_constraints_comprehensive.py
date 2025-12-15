@@ -43,7 +43,7 @@ def verify_hard_constraints(sessions):
     room_conflicts = 0
     
     for session in sessions:
-        student_group = session['Student_Group']
+        program = session['Student_Group']
         lecturer_id = session['Lecturer_ID']
         room = session['Room_Number']
         day = session['Day']
@@ -51,17 +51,17 @@ def verify_hard_constraints(sessions):
         key = (day, time_slot)
         
         # Check student conflicts
-        if key in student_time_slots[student_group]:
+        if key in student_time_slots[program]:
             student_conflicts += 1
             violations.append({
                 'constraint': 'No Double-Booking',
                 'type': 'Student',
-                'student_group': student_group,
+                'program': program,
                 'day': day,
                 'time_slot': time_slot,
                 'severity': 'CRITICAL'
             })
-        student_time_slots[student_group].add(key)
+        student_time_slots[program].add(key)
         
         # Check lecturer conflicts
         if key in lecturer_time_slots[lecturer_id]:
@@ -109,7 +109,7 @@ def verify_hard_constraints(sessions):
                 'room': session['Room_Number'],
                 'capacity': room_capacity,
                 'group_size': group_size,
-                'course': session['Course_Code'],
+                'subject': session['Course_Code'],
                 'severity': 'CRITICAL'
             })
             capacity_violations += 1
@@ -120,19 +120,19 @@ def verify_hard_constraints(sessions):
         print(f"   ❌ FAILED: {capacity_violations} capacity violations")
     
     # 3. Room Type Matching
-    print("\n3. Checking: Room Type Matching (Lab courses → Lab rooms, Theory courses → Theory rooms)...")
+    print("\n3. Checking: Room Type Matching (Lab subjects → Lab rooms, Theory subjects → Theory rooms)...")
     room_type_violations = 0
     for session in sessions:
         course_type = session['Course_Type']
         room_type = session['Room_Type']
-        course = session['Course_Code']
+        subject = session['Course_Code']
         room = session['Room_Number']
         
         if course_type == 'Lab' and room_type != 'Lab':
             room_type_violations += 1
             violations.append({
                 'constraint': 'Room Type Matching',
-                'course': course,
+                'subject': subject,
                 'course_type': course_type,
                 'room': room,
                 'room_type': room_type,
@@ -142,7 +142,7 @@ def verify_hard_constraints(sessions):
             room_type_violations += 1
             violations.append({
                 'constraint': 'Room Type Matching',
-                'course': course,
+                'subject': subject,
                 'course_type': course_type,
                 'room': room,
                 'room_type': room_type,
@@ -225,7 +225,7 @@ def verify_hard_constraints(sessions):
         lecturer_daily[lecturer_id][day].append({
             'time_slot': time_slot,
             'is_afternoon': is_afternoon,
-            'course': session['Course_Code']
+            'subject': session['Course_Code']
         })
     
     lecturer_daily_violations = 0
@@ -260,12 +260,25 @@ def verify_hard_constraints(sessions):
     
     # 7. Standard Teaching Blocks
     print("\n7. Checking: Standard Teaching Blocks...")
-    standard_blocks = {
-        '09:00-11:00': True,
-        '11:00-13:00': True,
-        '14:00-16:00': True,
-        '16:00-18:00': True
-    }
+    
+    # Load time slots from database (not hardcoded)
+    try:
+        from app.services.config_loader import get_time_slots
+        time_slots = get_time_slots(use_cache=True)
+        standard_blocks = {}
+        for slot in time_slots:
+            slot_str = f"{slot['start']}-{slot['end']}"
+            standard_blocks[slot_str] = True
+        
+        if not standard_blocks:
+            # Fallback if database is empty
+            standard_blocks = {'09:00-11:00': True, '11:00-13:00': True, '14:00-16:00': True, '16:00-18:00': True}
+            print("   ⚠️  WARNING: No time slots in database, using fallback values")
+    except Exception as e:
+        # Fallback if database access fails
+        standard_blocks = {'09:00-11:00': True, '11:00-13:00': True, '14:00-16:00': True, '16:00-18:00': True}
+        print(f"   ⚠️  WARNING: Failed to load time slots from database: {e}")
+        print("   Using fallback values")
     block_violations = 0
     for session in sessions:
         time_slot = session['Time_Slot']
@@ -285,25 +298,37 @@ def verify_hard_constraints(sessions):
     
     # 8. No Same-Day Unit Repetition
     print("\n8. Checking: No Same-Day Unit Repetition...")
-    # Map time slot strings to period indices (matching CSP logic)
-    time_slot_to_period = {
-        '09:00-11:00': 0,  # SLOT_1
-        '11:00-13:00': 1,  # SLOT_2
-        '14:00-16:00': 2,  # SLOT_3
-        '16:00-18:00': 3   # SLOT_4
-    }
+    
+    # Load time slots from database to build period mapping (not hardcoded)
+    try:
+        from app.services.config_loader import get_time_slots
+        time_slots = get_time_slots(use_cache=True)
+        time_slot_to_period = {}
+        periods = []
+        for idx, slot in enumerate(sorted(time_slots, key=lambda x: x.get('order', 0))):
+            slot_str = f"{slot['start']}-{slot['end']}"
+            time_slot_to_period[slot_str] = idx
+            periods.append(slot['period'])
+        
+        if not time_slot_to_period:
+            # Fallback if database is empty
+            time_slot_to_period = {'09:00-11:00': 0, '11:00-13:00': 1, '14:00-16:00': 2, '16:00-18:00': 3}
+            periods = ['SLOT_1', 'SLOT_2', 'SLOT_3', 'SLOT_4']
+    except Exception as e:
+        # Fallback if database access fails
+        time_slot_to_period = {'09:00-11:00': 0, '11:00-13:00': 1, '14:00-16:00': 2, '16:00-18:00': 3}
     periods = ['SLOT_1', 'SLOT_2', 'SLOT_3', 'SLOT_4']
     
-    # Group sessions by student_group, course, and day
+    # Group sessions by program, subject, and day
     course_sessions_by_day = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     for session in sessions:
-        student_group = session['Student_Group']
-        course = session['Course_Code']
+        program = session['Student_Group']
+        subject = session['Course_Code']
         day = session['Day']
         time_slot = session['Time_Slot']
         course_type = session['Course_Type']
         
-        course_sessions_by_day[student_group][day][course].append({
+        course_sessions_by_day[program][day][subject].append({
             'time_slot': time_slot,
             'period_idx': time_slot_to_period.get(time_slot),
             'course_type': course_type,
@@ -311,11 +336,11 @@ def verify_hard_constraints(sessions):
         })
     
     repetition_violations = 0
-    for student_group, days in course_sessions_by_day.items():
-        for day, courses in days.items():
-            for course, session_list in courses.items():
+    for program, days in course_sessions_by_day.items():
+        for day, subjects in days.items():
+            for subject, session_list in subjects.items():
                 if len(session_list) > 1:
-                    # Multiple sessions of same course on same day - check if consecutive
+                    # Multiple sessions of same subject on same day - check if consecutive
                     # Consecutive lab sessions (e.g., SLOT_1 + SLOT_2) are allowed
                     session_list.sort(key=lambda x: x['period_idx'] if x['period_idx'] is not None else 999)
                     
@@ -339,15 +364,15 @@ def verify_hard_constraints(sessions):
                     
                     # Only flag as violation if:
                     # 1. Sessions are NOT consecutive, OR
-                    # 2. It's not a lab course (lab courses can have consecutive sessions)
+                    # 2. It's not a lab subject (lab subjects can have consecutive sessions)
                     if not is_consecutive or course_type != 'Lab':
                         repetition_violations += 1
                         period_strs = [periods[s['period_idx']] if s['period_idx'] is not None else s['time_slot'] 
                                      for s in session_list]
                         violations.append({
                             'constraint': 'No Same-Day Unit Repetition',
-                            'student_group': student_group,
-                            'course': course,
+                            'program': program,
+                            'subject': subject,
                             'day': day,
                             'sessions': len(session_list),
                             'periods': period_strs,
@@ -409,18 +434,18 @@ def verify_hard_constraints(sessions):
     print("\n10. Checking: Class Splitting Rule (large groups must be split)...")
     splitting_violations = 0
     for session in sessions:
-        student_group = session['Student_Group']
+        program = session['Student_Group']
         group_size = int(session['Group_Size'])
         room_capacity = int(session['Room_Capacity'])
         
         # If group is too large for room, check if it's a split group
         if group_size > room_capacity:
-            is_split_group = '_SPLIT_' in student_group or 'SPLIT' in student_group.upper()
+            is_split_group = '_SPLIT_' in program or 'SPLIT' in program.upper()
             if not is_split_group:
                 splitting_violations += 1
                 violations.append({
                     'constraint': 'Class Splitting Rule',
-                    'student_group': student_group,
+                    'program': program,
                     'group_size': group_size,
                     'room': session['Room_Number'],
                     'room_capacity': room_capacity,

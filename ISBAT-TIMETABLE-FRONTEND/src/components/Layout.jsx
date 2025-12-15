@@ -12,34 +12,35 @@ import {
   Menu,
   X,
   Layers,
-  LogOut
+  LogOut,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import SemesterSwitcher from "@/components/SemesterSwitcher";
-import { useSemester } from "@/context/SemesterContext";
-import { authAPI } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Lecturers", href: "/lecturers", icon: Users },
-  { name: "Courses", href: "/courses", icon: BookOpen },
+  { name: "Subjects", href: "/subjects", icon: BookOpen },
   { name: "Rooms", href: "/rooms", icon: HomeIcon },
-  { name: "Student Groups", href: "/student-groups", icon: GraduationCap },
-  { name: "Course Groups", href: "/canonical-groups", icon: Layers },
+  { name: "Programs", href: "/programs", icon: GraduationCap },
+  { name: "Subject Groups", href: "/canonical-groups", icon: Layers },
   { name: "Timetables", href: "/timetables", icon: Calendar },
   { name: "Conflicts", href: "/conflicts", icon: AlertCircle },
+  { name: "Reports", href: "/reports", icon: FileText },
 ];
 
 const SidebarNav = ({ isMobile = false, onItemClick }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
-    authAPI.logout();
+    logout();
     toast.success("Logged out successfully");
-    navigate("/login");
+    navigate("/login", { replace: true });
     if (onItemClick) onItemClick();
   };
 
@@ -85,12 +86,11 @@ const SidebarNav = ({ isMobile = false, onItemClick }) => {
 
 export default function Layout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { current } = useSemester();
 
   return (
     <div className="min-h-screen flex w-full bg-background">
-      {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex lg:w-64 lg:flex-col bg-primary border-r border-primary-hover h-screen">
+      {/* Desktop Sidebar - Fixed */}
+      <aside className="hidden lg:flex lg:w-64 lg:flex-col bg-primary border-r border-primary-hover h-screen fixed top-0 left-0 z-10">
         {/* Logo Section - White Background */}
         <div className="bg-white border-b border-primary-light p-6 flex-shrink-0">
           <img
@@ -133,14 +133,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto lg:ml-0 pt-16 lg:pt-0">
-        {/* Desktop top bar */}
-        <div className="hidden lg:block border-b border-border bg-white/60 backdrop-blur supports-[backdrop-filter]:bg-white/40">
-          <div className="container px-6 py-3 flex items-center justify-between">
-            <SemesterSwitcher />
-            <div className="text-xs text-muted-foreground">{current.label}</div>
-          </div>
-        </div>
+      <main className="flex-1 overflow-y-auto lg:ml-64 pt-16 lg:pt-0">
         <div className="container py-4 px-4 sm:py-6 sm:px-6 lg:px-8 max-w-full">
           {children}
         </div>

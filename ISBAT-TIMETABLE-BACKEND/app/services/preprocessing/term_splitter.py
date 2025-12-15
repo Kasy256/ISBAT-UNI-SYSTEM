@@ -1,7 +1,7 @@
 ﻿import math
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
-from app.models.course import CourseUnit
+from app.models.subject import CourseUnit
 
 @dataclass
 class TermSplitRatio:
@@ -192,10 +192,10 @@ class TermSplitter:
         
         # Extract program from course units if not provided
         if not program and course_units:
-            # Try to get program from first course (most courses in a group share same program)
+            # Try to get program from first subject (most subjects in a group share same program)
             program = getattr(course_units[0], 'program', None)
         
-        # Count course groups as 1 unit (Theory + Practical = 1 unit)
+        # Count subject groups as 1 unit (Theory + Practical = 1 unit)
         course_groups = {}
         for unit in course_units:
             if unit.course_group:
@@ -203,7 +203,7 @@ class TermSplitter:
                     course_groups[unit.course_group] = []
                 course_groups[unit.course_group].append(unit)
         
-        # Calculate effective unit count (groups count as 1, standalone courses count as 1)
+        # Calculate effective unit count (groups count as 1, standalone subjects count as 1)
         standalone_units = [u for u in course_units if not u.course_group]
         effective_unit_count = len(course_groups) + len(standalone_units)
 
@@ -238,10 +238,10 @@ class TermSplitter:
             term2_target_units = ratio.term2_units
         
         # SIMPLIFIED APPROACH: Term splitting is based ONLY on preferred_term from database
-        # Since preferred_term is mandatory in the frontend, all courses must have it
+        # Since preferred_term is mandatory in the frontend, all subjects must have it
         # No fallback logic needed - if preferred_term is missing, raise an error
         
-        # Step 1: Group courses by course_group first (Theory+Practical pairs)
+        # Step 1: Group subjects by course_group first (Theory+Practical pairs)
         course_groups_dict = {}
         standalone_courses = []
         
@@ -253,17 +253,17 @@ class TermSplitter:
             else:
                 standalone_courses.append(unit)
         
-        # Step 2: Assign courses to terms based on:
-        # Priority 1: Canonical alignment (for merging equivalent courses across programs)
+        # Step 2: Assign subjects to terms based on:
+        # Priority 1: Canonical alignment (for merging equivalent subjects across programs)
         # Priority 2: Preferred term from database/client input (main driver)
         
         term1_units = []
         term2_units = []
         missing_preferred_term = []  # Track units without preferred_term for error reporting
         
-        # Process course groups first (they count as 1 unit, Theory+Practical stay together)
+        # Process subject groups first (they count as 1 unit, Theory+Practical stay together)
         for group_id, group_units in course_groups_dict.items():
-            # Check canonical alignment for any course in the group
+            # Check canonical alignment for any subject in the group
             group_canonical_term = None
             for unit in group_units:
                 canonical_id = unit.canonical_id
@@ -280,7 +280,7 @@ class TermSplitter:
                 continue
             
             # Priority 2: Use preferred_term from database
-            # For course groups, all courses in the group should have the same preferred_term
+            # For subject groups, all subjects in the group should have the same preferred_term
             # Take majority if they differ (shouldn't happen in practice)
             from collections import Counter
             group_preferred_terms = []
@@ -304,7 +304,7 @@ class TermSplitter:
                 # No preferred_term found - this should not happen (mandatory field)
                 missing_preferred_term.extend(group_units)
         
-        # Process standalone courses
+        # Process standalone subjects
         for unit in standalone_courses:
             canonical_id = unit.canonical_id
             forced_term = canonical_alignment.get(canonical_id) if canonical_id else None
@@ -324,13 +324,13 @@ class TermSplitter:
                 # No preferred_term - this should not happen (mandatory field)
                 missing_preferred_term.append(unit)
         
-        # Error if any course is missing preferred_term (it's mandatory)
+        # Error if any subject is missing preferred_term (it's mandatory)
         if missing_preferred_term:
             missing_codes = [u.code for u in missing_preferred_term]
             raise ValueError(
-                f"Term splitting failed: {len(missing_preferred_term)} course(s) are missing preferred_term "
-                f"(mandatory field). Courses: {', '.join(missing_codes)}. "
-                f"Please set preferred_term for all courses in the database/frontend."
+                f"Term splitting failed: {len(missing_preferred_term)} subject(s) are missing preferred_term "
+                f"(mandatory field). Subjects: {', '.join(missing_codes)}. "
+                f"Please set preferred_term for all subjects in the database/frontend."
             )
         
         # Create term plans
@@ -365,27 +365,16 @@ class TermSplitter:
         term2_hours = sum(u.weekly_hours for u in term2_units)
         term1_labs = sum(1 for u in term1_units if u.preferred_room_type == "Lab")
         term2_labs = sum(1 for u in term2_units if u.preferred_room_type == "Lab")
-        term1_difficulty = sum(self._difficulty_weight(u.difficulty) for u in term1_units)
-        term2_difficulty = sum(self._difficulty_weight(u.difficulty) for u in term2_units)
+        # Difficulty is no longer used - removed difficulty calculations
         
         for unit in flexible_units:
             term1_score = 0.5
             term2_score = 0.5
             reasoning = []
             
-            # Factor 1: Foundational courses prefer Term 1
-            if unit.is_foundational:
-                term1_score += 0.25
-                reasoning.append("Foundational course")
-            
-            # Factor 2: Difficulty distribution
-            unit_difficulty = self._difficulty_weight(unit.difficulty)
-            if term1_difficulty < term2_difficulty:
-                term1_score += 0.10
-                reasoning.append("Balance difficulty")
-            else:
-                term2_score += 0.10
-                reasoning.append("Balance difficulty")
+            # Note: is_foundational and difficulty are no longer used
+            # All subjects should have preferred_term set (mandatory field)
+            # This code path should rarely be reached
             
             # Factor 3: Resource demand (labs)
             if unit.preferred_room_type == "Lab":
@@ -443,13 +432,8 @@ class TermSplitter:
         return pairs
     
     def _difficulty_weight(self, difficulty: str) -> int:
-        """Get numeric weight for difficulty"""
-        weights = {
-            "Easy": 1,
-            "Medium": 2,
-            "Hard": 3
-        }
-        return weights.get(difficulty, 2)
+        """Legacy method - difficulty is no longer used, always returns 0"""
+        return 0
     
     def validate_split(self, term1: TermPlan, term2: TermPlan) -> Dict:
         """Validate term split"""
@@ -468,12 +452,7 @@ class TermSplitter:
         if hours_diff > 6:
             issues.append(f"Large workload imbalance: {hours_diff} hours difference")
         
-        # Check prerequisite ordering
-        for unit in term1.assigned_units:
-            for prereq_id in unit.prerequisites:
-                # Prerequisite should not be in term 2
-                if any(u.id == prereq_id for u in term2.assigned_units):
-                    issues.append(f"Prerequisite order violation: {unit.id} in T1 but {prereq_id} in T2")
+        # Prerequisite validation removed - system now uses preferred_term directly
         
         return {
             'valid': len(issues) == 0,

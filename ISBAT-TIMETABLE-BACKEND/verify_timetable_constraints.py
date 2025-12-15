@@ -7,11 +7,11 @@ Usage:
 The script inspects the exported timetable CSV and performs the following:
     • Hard constraint checks (double-booking, capacity, room type, etc.)
     • Soft constraint checks (weekly/daily lecturer load, repeated units)
-    • Canonical merge validation (ensures equivalent courses really merged)
+    • Canonical merge validation (ensures equivalent subjects really merged)
     • Theory/Practical pairing validation
-    • Student group schedule analysis (gaps, distribution)
+    • Program schedule analysis (gaps, distribution)
     • Room utilization analysis
-    • Course completion checks
+    • Subject completion checks
     • Detailed logging so conflicts are easy to spot
     • Export violations to JSON file
 """
@@ -54,6 +54,20 @@ def log_summary(title: str, count: int, ok_message: str):
     print(f"{emoji} {title}: {postfix}")
 
 
+def get_program_label(row: Dict[str, str]) -> str:
+    """Return the normalized program identifier for a CSV row."""
+    return row.get('Program') or row.get('Student_Group', '')
+
+
+def get_program_size(row: Dict[str, str]) -> int:
+    """Return the normalized student size for a CSV row."""
+    size_value = row.get('Student_Size') or row.get('Group_Size') or 0
+    try:
+        return int(size_value)
+    except (ValueError, TypeError):
+        return 0
+
+
 def check_double_booking(sessions: List[Dict[str, str]], violations: List[Dict]) -> None:
     print("\n[Hard] Double booking / overlaps")
     buckets = {
@@ -62,7 +76,7 @@ def check_double_booking(sessions: List[Dict[str, str]], violations: List[Dict])
         'room': defaultdict(lambda: defaultdict(list)),
     }
     labels = {
-        'student': 'Student group',
+        'student': 'Program',
         'lecturer': 'Lecturer',
         'room': 'Room',
     }
@@ -73,7 +87,7 @@ def check_double_booking(sessions: List[Dict[str, str]], violations: List[Dict])
         slot = row['Time_Slot']
         key = (day, slot)
         mappings = {
-            'student': row['Student_Group'],
+            'student': get_program_label(row),
             'lecturer': row['Lecturer_ID'],
             'room': row['Room_Number'],
         }
@@ -82,8 +96,8 @@ def check_double_booking(sessions: List[Dict[str, str]], violations: List[Dict])
                 # Get existing conflicting sessions
                 existing_sessions = buckets[bucket_name][entity_id][key]
                 
-                # Check if this is a legitimate canonical course merge (same canonical ID)
-                # Canonical courses should be scheduled together, so this is NOT a violation
+                # Check if this is a legitimate canonical subject merge (same canonical ID)
+                # Canonical subjects should be scheduled together, so this is NOT a violation
                 # ALL existing sessions must be compatible (canonical merges) for this to be allowed
                 current_course = row['Course_Code']
                 current_canonical = get_canonical_id(current_course) or current_course
@@ -92,10 +106,10 @@ def check_double_booking(sessions: List[Dict[str, str]], violations: List[Dict])
                 for existing in existing_sessions:
                     existing_course = existing['Course_Code']
                     existing_canonical = get_canonical_id(existing_course) or existing_course
-                    # If both courses map to the same canonical ID, they should be scheduled together
+                    # If both subjects map to the same canonical ID, they should be scheduled together
                     if current_canonical == existing_canonical and current_canonical in CANONICAL_COURSE_MAPPING:
                         continue  # This existing session is a canonical merge - compatible
-                    # If courses are different canonical IDs, it's a conflict
+                    # If subjects are different canonical IDs, it's a conflict
                     all_compatible = False
                     break
                 
@@ -107,7 +121,7 @@ def check_double_booking(sessions: List[Dict[str, str]], violations: List[Dict])
                         'type': bucket_name,
                         'entity': entity_id,
                         'entity_name': row.get('Lecturer_Name' if bucket_name == 'lecturer' else 
-                                               row.get('Student_Group', entity_id)),
+                                               get_program_label(row)),
                         'day': day,
                         'time_slot': slot,
                         'session_id': row['Session_ID'],
@@ -136,7 +150,7 @@ def check_room_capacity_and_type(sessions: List[Dict[str, str]], violations: Lis
     type_violations = 0
     for row in sessions:
         capacity = int(row['Room_Capacity'])
-        size = int(row['Group_Size'])
+        size = get_program_size(row)
         course_code = row['Course_Code']
         room = row['Room_Number']
         if size > capacity:
@@ -144,7 +158,7 @@ def check_room_capacity_and_type(sessions: List[Dict[str, str]], violations: Lis
             violations.append({
                 'constraint': 'room_capacity',
                 'room': room,
-                'course': course_code,
+                'subject': course_code,
                 'size': size,
                 'capacity': capacity,
                 'severity': 'CRITICAL',
@@ -152,13 +166,13 @@ def check_room_capacity_and_type(sessions: List[Dict[str, str]], violations: Lis
         course_type = row['Course_Type']
         room_type = row['Room_Type']
         if course_type == 'Lab' and room_type != 'Lab':
-            # Calculate TOTAL merged students for canonical courses at same time slot
+            # Calculate TOTAL merged students for canonical subjects at same time slot
             day = row['Day']
             slot = row['Time_Slot']
             time_key = (day, slot)
             current_canonical = get_canonical_id(course_code) or course_code
             
-            # Sum all groups with same canonical course at same time in same room
+            # Sum all groups with same canonical subject at same time in same room
             total_merged_students = size
             for other_row in sessions:
                 if (other_row['Day'] == day and other_row['Time_Slot'] == slot and 
@@ -166,7 +180,7 @@ def check_room_capacity_and_type(sessions: List[Dict[str, str]], violations: Lis
                     other_course = other_row['Course_Code']
                     other_canonical = get_canonical_id(other_course) or other_course
                     if other_canonical == current_canonical and current_canonical in CANONICAL_COURSE_MAPPING:
-                        total_merged_students += int(other_row.get('Group_Size', 0))
+                        total_merged_students += get_program_size(other_row)
             
             # Get all Lab rooms and their capacities
             try:
@@ -203,11 +217,11 @@ def check_room_capacity_and_type(sessions: List[Dict[str, str]], violations: Lis
                     if (other_row['Day'] == day and other_row['Time_Slot'] == slot and 
                         other_row['Room_Number'] == lab_room_id and 
                         other_row['Session_ID'] != row['Session_ID']):
-                        # Room is booked - check if it's for the same canonical course (allowed merge)
+                        # Room is booked - check if it's for the same canonical subject (allowed merge)
                         other_course = other_row['Course_Code']
                         other_canonical = get_canonical_id(other_course) or other_course
                         if other_canonical != current_canonical:
-                            # Different canonical course - room is not available
+                            # Different canonical subject - room is not available
                             room_available = False
                             break
                 
@@ -222,8 +236,8 @@ def check_room_capacity_and_type(sessions: List[Dict[str, str]], violations: Lis
                 type_violations += 1
                 violations.append({
                     'constraint': 'room_type',
-                    'reason': f'Lab course assigned to non-lab room (merged total {total_merged_students} students fits in available Lab room {available_lab_room_id} with capacity {available_lab_capacity})',
-                    'course': course_code,
+                    'reason': f'Lab subject assigned to non-lab room (merged total {total_merged_students} students fits in available Lab room {available_lab_room_id} with capacity {available_lab_capacity})',
+                    'subject': course_code,
                     'room': room,
                     'room_type': room_type,
                     'group_size': size,
@@ -237,8 +251,8 @@ def check_room_capacity_and_type(sessions: List[Dict[str, str]], violations: Lis
             type_violations += 1
             violations.append({
                 'constraint': 'room_type',
-                'reason': 'Theory course assigned to inappropriate room',
-                'course': course_code,
+                'reason': 'Theory subject assigned to inappropriate room',
+                'subject': course_code,
                 'room': room,
                 'room_type': room_type,
                 'severity': 'CRITICAL',
@@ -302,7 +316,25 @@ def check_lecturer_loads(sessions: List[Dict[str, str]], violations: List[Dict])
 
 def check_standard_blocks(sessions: List[Dict[str, str]], violations: List[Dict]):
     print("\n[Hard] Standard teaching blocks")
+    
+    # Load allowed time slots from database (not hardcoded)
+    try:
+        from app.services.config_loader import get_time_slots
+        time_slots = get_time_slots(use_cache=True)
+        allowed = set()
+        for slot in time_slots:
+            allowed.add(f"{slot['start']}-{slot['end']}")
+        
+        if not allowed:
+            # Fallback if database is empty (should not happen)
     allowed = {'09:00-11:00', '11:00-13:00', '14:00-16:00', '16:00-18:00'}
+            print("   ⚠️  WARNING: No time slots in database, using fallback values")
+    except Exception as e:
+        # Fallback if database access fails
+        allowed = {'09:00-11:00', '11:00-13:00', '14:00-16:00', '16:00-18:00'}
+        print(f"   ⚠️  WARNING: Failed to load time slots from database: {e}")
+        print("   Using fallback values")
+    
     bad = 0
     for row in sessions:
         slot = row['Time_Slot']
@@ -318,15 +350,31 @@ def check_standard_blocks(sessions: List[Dict[str, str]], violations: List[Dict]
 
 
 def check_same_day_repetition(sessions: List[Dict[str, str]], violations: List[Dict]):
-    print("\n[Hard] Same-day repetition per student group")
+    print("\n[Hard] Same-day repetition per program")
+    
+    # Load time slots from database to build slot_index (not hardcoded)
+    try:
+        from app.services.config_loader import get_time_slots
+        time_slots = get_time_slots(use_cache=True)
+        slot_index = {}
+        for idx, slot in enumerate(sorted(time_slots, key=lambda x: x.get('order', 0))):
+            slot_str = f"{slot['start']}-{slot['end']}"
+            slot_index[slot_str] = idx
+        
+        if not slot_index:
+            # Fallback if database is empty
+            slot_index = {'09:00-11:00': 0, '11:00-13:00': 1, '14:00-16:00': 2, '16:00-18:00': 3}
+    except Exception as e:
+        # Fallback if database access fails
     slot_index = {'09:00-11:00': 0, '11:00-13:00': 1, '14:00-16:00': 2, '16:00-18:00': 3}
     grouped = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
     for row in sessions:
-        grouped[row['Student_Group']][row['Day']][row['Course_Code']].append(row)
+        program = get_program_label(row)
+        grouped[program][row['Day']][row['Course_Code']].append(row)
     repeats = 0
     for group, days in grouped.items():
-        for day, courses in days.items():
-            for course, slots in courses.items():
+        for day, subjects in days.items():
+            for subject, slots in subjects.items():
                 if len(slots) <= 1:
                     continue
                 indices = sorted(slot_index.get(s['Time_Slot'], -1) for s in slots)
@@ -336,8 +384,8 @@ def check_same_day_repetition(sessions: List[Dict[str, str]], violations: List[D
                     repeats += 1
                     violations.append({
                         'constraint': 'same_day_unit',
-                        'student_group': group,
-                        'course': course,
+                        'program': group,
+                        'subject': subject,
                         'day': day,
                         'slots': [s['Time_Slot'] for s in slots],
                         'severity': 'CRITICAL',
@@ -346,7 +394,7 @@ def check_same_day_repetition(sessions: List[Dict[str, str]], violations: List[D
 
 
 def analyze_canonical_merges(sessions: List[Dict[str, str]], violations: List[Dict]):
-    """Analyze canonical course merging using CANONICAL_COURSE_MAPPING as source of truth"""
+    """Analyze canonical subject merging using CANONICAL_COURSE_MAPPING as source of truth"""
     section("Canonical merge audit (using CANONICAL_COURSE_MAPPING)")
     
     # Build mapping: course_code -> canonical_id using CANONICAL_COURSE_MAPPING
@@ -365,40 +413,40 @@ def analyze_canonical_merges(sessions: List[Dict[str, str]], violations: List[Di
         if canonical_id:
             canonical_sessions[canonical_id].append(row)
         else:
-            # Check if it's already a canonical ID (merged course)
+            # Check if it's already a canonical ID (merged subject)
             if course_code in CANONICAL_COURSE_MAPPING:
                 canonical_sessions[course_code].append(row)
             else:
                 non_canonical_sessions.append(course_code)
     
-    print(f"📊 Found {len(canonical_sessions)} canonical course groups")
-    print(f"📊 Found {len(set(non_canonical_sessions))} non-canonical courses")
+    print(f"📊 Found {len(canonical_sessions)} canonical subject groups")
+    print(f"📊 Found {len(set(non_canonical_sessions))} non-canonical subjects")
     
     merge_alignment_issues = 0
     capacity_issues = 0
     
     for canonical_id, rows in canonical_sessions.items():
-        # Get expected course codes from mapping
+        # Get expected subject codes from mapping
         expected_courses = CANONICAL_COURSE_MAPPING.get(canonical_id, [canonical_id])
-        groups = sorted({r['Student_Group'] for r in rows})
+        groups = sorted({get_program_label(r) for r in rows})
         times = Counter((r['Day'], r['Time_Slot']) for r in rows)
         unique_slots = len(times)
         
-        # Group by course codes to see which original courses are present
+        # Group by subject codes to see which original subjects are present
         present_course_codes = sorted({r['Course_Code'] for r in rows})
         
         print(f"\n• {canonical_id} (from mapping: {', '.join(expected_courses)})")
-        print(f"   Present courses: {', '.join(present_course_codes)}")
-        print(f"   Student groups: {len(groups)}, Time slots: {unique_slots}")
+        print(f"   Present subjects: {', '.join(present_course_codes)}")
+        print(f"   Programs: {len(groups)}, Time slots: {unique_slots}")
         
-        # Check if canonical courses are scheduled at different times
-        # For courses with 2 sessions per week, they SHOULD be in 2 different time slots (different days)
-        # VIOLATION: Same student group has same course twice on same day
+        # Check if canonical subjects are scheduled at different times
+        # For subjects with 2 sessions per week, they SHOULD be in 2 different time slots (different days)
+        # VIOLATION: Same program has same subject twice on same day
         same_day_violations = 0
         for group in groups:
-            group_rows = [r for r in rows if r['Student_Group'] == group]
+            group_rows = [r for r in rows if get_program_label(r) == group]
             group_times = Counter((r['Day'], r['Time_Slot']) for r in group_rows)
-            # Check if same group has same course on same day (should only be once per day)
+            # Check if same group has same subject on same day (should only be once per day)
             day_counts = Counter(r['Day'] for r in group_rows)
             for day, count in day_counts.items():
                 if count > 1:
@@ -407,11 +455,11 @@ def analyze_canonical_merges(sessions: List[Dict[str, str]], violations: List[Di
                     violations.append({
                         'constraint': 'canonical_same_day_repetition',
                         'canonical_id': canonical_id,
-                        'student_group': group,
+                        'program': group,
                         'day': day,
                         'time_slots': day_slots,
                         'severity': 'CRITICAL',
-                        'message': f'Canonical course {canonical_id} scheduled {count} times on {day} for {group} (HARD: only 1 session per day allowed)'
+                        'message': f'Canonical subject {canonical_id} scheduled {count} times on {day} for {group} (HARD: only 1 session per day allowed)'
                     })
         
         if same_day_violations == 0:
@@ -425,8 +473,8 @@ def analyze_canonical_merges(sessions: List[Dict[str, str]], violations: List[Di
         
         # Check room capacity for merged groups
         for (day, slot), freq in times.items():
-            involved = [r['Student_Group'] for r in rows if r['Day'] == day and r['Time_Slot'] == slot]
-            total_size = sum(int(r.get('Group_Size', 0)) for r in rows if r['Day'] == day and r['Time_Slot'] == slot)
+            involved = [get_program_label(r) for r in rows if r['Day'] == day and r['Time_Slot'] == slot]
+            total_size = sum(get_program_size(r) for r in rows if r['Day'] == day and r['Time_Slot'] == slot)
             
             # Get room capacity from first session
             room_capacity = 0
@@ -455,16 +503,16 @@ def analyze_canonical_merges(sessions: List[Dict[str, str]], violations: List[Di
             elif room_capacity > 0:
                 print(f"   ✅ {day} {slot}: {total_size} students ≤ {room_capacity} capacity")
     
-    log_summary("Canonical merge alignment issues", merge_alignment_issues, "all canonical courses properly merged at same time")
+    log_summary("Canonical merge alignment issues", merge_alignment_issues, "all canonical subjects properly merged at same time")
     log_summary("Canonical merge capacity issues", capacity_issues, "all merged groups fit in rooms")
 
 
 def check_theory_practical_pairs(sessions: List[Dict[str, str]], violations: List[Dict]):
-    """Check that theory and practical components are scheduled at the same time using canonical courses"""
+    """Check that theory and practical components are scheduled at the same time using canonical subjects"""
     print("\n[Hard] Theory/Practical pairing (using CANONICAL_COURSE_MAPPING)")
     
-    # Use canonical course mapping to identify theory/practical pairs
-    # Canonical courses that include both theory and practical should be scheduled together
+    # Use canonical subject mapping to identify theory/practical pairs
+    # Canonical subjects that include both theory and practical should be scheduled together
     pair_violations = 0
     
     # Group sessions by canonical ID
@@ -473,26 +521,26 @@ def check_theory_practical_pairs(sessions: List[Dict[str, str]], violations: Lis
         course_code = row['Course_Code']
         canonical_id = get_canonical_id(course_code)
         if canonical_id:
-            # Check if this canonical course includes both theory and practical
+            # Check if this canonical subject includes both theory and practical
             expected_courses = CANONICAL_COURSE_MAPPING.get(canonical_id, [])
-            # Group by student group to check pairing per group
-            student_group = row['Student_Group']
-            canonical_sessions[canonical_id][student_group].append(row)
+            # Group by program to check pairing per group
+            program = get_program_label(row)
+            canonical_sessions[canonical_id][program].append(row)
     
-    # Check each canonical course group
+    # Check each canonical subject group
     for canonical_id, group_sessions in canonical_sessions.items():
         expected_courses = CANONICAL_COURSE_MAPPING.get(canonical_id, [])
         
-        # Check if this canonical course should have theory+practical
-        # (if it includes courses with both theory and practical in their names)
+        # Check if this canonical subject should have theory+practical
+        # (if it includes subjects with both theory and practical in their names)
         has_theory = any('theory' in c.lower() or 'Theory' in c for c in expected_courses)
         has_practical = any('practical' in c.lower() or 'Practical' in c or 'Lab' in c for c in expected_courses)
         
         if not (has_theory and has_practical):
             continue  # Not a theory/practical pair
         
-        # Check each student group
-        for student_group, rows in group_sessions.items():
+        # Check each program
+        for program, rows in group_sessions.items():
             theory_rows = [r for r in rows if 'theory' in r['Course_Name'].lower() or r['Course_Type'] == 'Theory']
             practical_rows = [r for r in rows if 'practical' in r['Course_Name'].lower() or r['Course_Type'] == 'Lab']
             
@@ -501,41 +549,52 @@ def check_theory_practical_pairs(sessions: List[Dict[str, str]], violations: Lis
                 theory_times = {(r['Day'], r['Time_Slot']) for r in theory_rows}
                 practical_times = {(r['Day'], r['Time_Slot']) for r in practical_rows}
                 
-                # They should have at least one common time slot (canonical courses are unified)
+                # They should have at least one common time slot (canonical subjects are unified)
                 common_times = theory_times & practical_times
                 if not common_times:
                     pair_violations += 1
                     violations.append({
                         'constraint': 'theory_practical_pairing',
                         'canonical_id': canonical_id,
-                        'student_group': student_group,
+                        'program': program,
                         'theory_times': list(theory_times),
                         'practical_times': list(practical_times),
                         'theory_codes': [r['Course_Code'] for r in theory_rows],
                         'practical_codes': [r['Course_Code'] for r in practical_rows],
                         'severity': 'CRITICAL',
-                        'message': f'Canonical course {canonical_id}: Theory and Practical components scheduled at different times (should be unified)'
+                        'message': f'Canonical subject {canonical_id}: Theory and Practical components scheduled at different times (should be unified)'
                     })
     
-    log_summary("Theory/Practical pairing violations", pair_violations, "all canonical course pairs scheduled together")
+    log_summary("Theory/Practical pairing violations", pair_violations, "all canonical subject pairs scheduled together")
 
 
-def check_student_group_schedule_quality(sessions: List[Dict[str, str]], violations: List[Dict]):
-    """Check student group schedule quality (gaps, distribution, balance)"""
-    print("\n[Soft] Student group schedule quality")
+def check_program_schedule_quality(sessions: List[Dict[str, str]], violations: List[Dict]):
+    """Check program schedule quality (gaps, distribution, balance)"""
+    print("\n[Soft] Program schedule quality")
     
-    slot_times = {
-        '09:00-11:00': 9,
-        '11:00-13:00': 11,
-        '14:00-16:00': 14,
-        '16:00-18:00': 16
-    }
+    # Load time slots from database to build slot_times (not hardcoded)
+    try:
+        from app.services.config_loader import get_time_slots
+        time_slots = get_time_slots(use_cache=True)
+        slot_times = {}
+        for slot in time_slots:
+            slot_str = f"{slot['start']}-{slot['end']}"
+            # Extract hour from start time for sorting
+            start_hour = int(slot['start'].split(':')[0])
+            slot_times[slot_str] = start_hour
+        
+        if not slot_times:
+            # Fallback if database is empty
+            slot_times = {'09:00-11:00': 9, '11:00-13:00': 11, '14:00-16:00': 14, '16:00-18:00': 16}
+    except Exception as e:
+        # Fallback if database access fails
+        slot_times = {'09:00-11:00': 9, '11:00-13:00': 11, '14:00-16:00': 14, '16:00-18:00': 16}
     
     day_order = {'MON': 0, 'TUE': 1, 'WED': 2, 'THU': 3, 'FRI': 4}
     
     by_group = defaultdict(lambda: defaultdict(list))
     for row in sessions:
-        by_group[row['Student_Group']][row['Day']].append(row)
+        by_group[get_program_label(row)][row['Day']].append(row)
     
     gap_violations = 0
     distribution_violations = 0
@@ -559,7 +618,7 @@ def check_student_group_schedule_quality(sessions: List[Dict[str, str]], violati
                     gap_violations += 1
                     violations.append({
                         'constraint': 'schedule_gap',
-                        'student_group': group_id,
+                        'program': group_id,
                         'day': day,
                         'gap_hours': gap,
                         'first_slot': sorted_sessions[i]['Time_Slot'],
@@ -581,7 +640,7 @@ def check_student_group_schedule_quality(sessions: List[Dict[str, str]], violati
                 overload_day = max(day_counts, key=day_counts.get)
                 violations.append({
                     'constraint': 'unbalanced_distribution',
-                    'student_group': group_id,
+                    'program': group_id,
                     'overload_day': overload_day,
                     'sessions': day_counts[overload_day],
                     'average': round(avg_sessions, 1),
@@ -596,7 +655,7 @@ def check_student_group_schedule_quality(sessions: List[Dict[str, str]], violati
                 overload_day = max(day_counts, key=day_counts.get)
                 violations.append({
                     'constraint': 'day_overload',
-                    'student_group': group_id,
+                    'program': group_id,
                     'day': overload_day,
                     'sessions': day_counts[overload_day],
                     'severity': 'WARNING',
@@ -617,7 +676,7 @@ def check_room_utilization(sessions: List[Dict[str, str]], violations: List[Dict
     for row in sessions:
         room = row['Room_Number']
         capacity = int(row['Room_Capacity'])
-        size = int(row['Group_Size'])
+        size = get_program_size(row)
         time_key = (row['Day'], row['Time_Slot'])
         
         room_usage[room]['sessions'] += 1
@@ -666,17 +725,17 @@ def check_room_utilization(sessions: List[Dict[str, str]], violations: List[Dict
 
 
 def check_course_completion(sessions: List[Dict[str, str]], violations: List[Dict]):
-    """Check that all required course sessions are scheduled (using canonical IDs)"""
-    print("\n[Hard] Course completion (using canonical courses)")
+    """Check that all required subject sessions are scheduled (using canonical IDs)"""
+    print("\n[Hard] Subject completion (using canonical subjects)")
     
-    # Count sessions per canonical course per group
+    # Count sessions per canonical subject per group
     canonical_sessions = defaultdict(int)
     course_info = {}
     
     for row in sessions:
         course_code = row['Course_Code']
         canonical_id = get_canonical_id(course_code) or course_code
-        key = (row['Student_Group'], canonical_id)
+        key = (get_program_label(row), canonical_id)
         canonical_sessions[key] += 1
         if key not in course_info:
             course_info[key] = {
@@ -687,46 +746,46 @@ def check_course_completion(sessions: List[Dict[str, str]], violations: List[Dic
             }
     
     # Estimate required sessions (typically 2 hours per session)
-    # Canonical courses should have 2 sessions per week (4 hours = 2 sessions)
+    # Canonical subjects should have 2 sessions per week (4 hours = 2 sessions)
     incomplete = 0
     
     for (group, canonical_id), count in canonical_sessions.items():
         info = course_info.get((group, canonical_id), {})
-        # Canonical courses should typically have 2 sessions per week
+        # Canonical subjects should typically have 2 sessions per week
         # Flag if significantly less (0 or 1 session when expecting 2)
         if count == 0:
             incomplete += 1
             violations.append({
                 'constraint': 'course_incomplete',
-                'student_group': group,
+                'program': group,
                 'canonical_id': canonical_id,
                 'original_code': info.get('original_code', canonical_id),
                 'sessions_scheduled': count,
                 'severity': 'WARNING',
-                'message': f'Canonical course {canonical_id} has no scheduled sessions'
+                'message': f'Canonical subject {canonical_id} has no scheduled sessions'
             })
         elif count == 1:
-            # Might be incomplete - canonical courses should have 2 sessions
+            # Might be incomplete - canonical subjects should have 2 sessions
             incomplete += 1
             violations.append({
                 'constraint': 'course_incomplete',
-                'student_group': group,
+                'program': group,
                 'canonical_id': canonical_id,
                 'original_code': info.get('original_code', canonical_id),
                 'sessions_scheduled': count,
                 'severity': 'INFO',
-                'message': f'Canonical course {canonical_id} has only {count} session (expected 2)'
+                'message': f'Canonical subject {canonical_id} has only {count} session (expected 2)'
             })
     
-    log_summary("Incomplete courses", incomplete, "all courses have sessions scheduled")
+    log_summary("Incomplete subjects", incomplete, "all subjects have sessions scheduled")
 
 
 def check_lecturer_specialization(sessions: List[Dict[str, str]], violations: List[Dict]):
-    """Check that lecturers are teaching courses in their specialization"""
+    """Check that lecturers are teaching subjects in their specialization"""
     print("\n[Soft] Lecturer specialization")
     
     # This is a soft check - we'd need lecturer data to fully validate
-    # For now, we'll just track which lecturers teach which courses
+    # For now, we'll just track which lecturers teach which subjects
     lecturer_courses = defaultdict(set)
     
     for row in sessions:
@@ -734,21 +793,21 @@ def check_lecturer_specialization(sessions: List[Dict[str, str]], violations: Li
         course_code = row['Course_Code']
         lecturer_courses[lecturer_id].add(course_code)
     
-    # Report lecturers teaching many different courses (might indicate specialization issues)
+    # Report lecturers teaching many different subjects (might indicate specialization issues)
     diverse_lecturers = 0
-    for lecturer_id, courses in lecturer_courses.items():
-        if len(courses) > 8:  # Teaching more than 8 different courses might be excessive
+    for lecturer_id, subjects in lecturer_courses.items():
+        if len(subjects) > 8:  # Teaching more than 8 different subjects might be excessive
             diverse_lecturers += 1
             violations.append({
                 'constraint': 'lecturer_diversity',
                 'lecturer_id': lecturer_id,
-                'num_courses': len(courses),
-                'courses': list(courses),
+                'num_courses': len(subjects),
+                'subjects': list(subjects),
                 'severity': 'INFO',
-                'message': f'Lecturer {lecturer_id} teaching {len(courses)} different courses'
+                'message': f'Lecturer {lecturer_id} teaching {len(subjects)} different subjects'
             })
     
-    log_summary("Lecturer diversity issues", diverse_lecturers, "lecturers have reasonable course diversity")
+    log_summary("Lecturer diversity issues", diverse_lecturers, "lecturers have reasonable subject diversity")
 
 
 def check_semester_coverage(sessions: List[Dict[str, str]], violations: List[Dict]):
@@ -758,14 +817,14 @@ def check_semester_coverage(sessions: List[Dict[str, str]], violations: List[Dic
     semester_groups = defaultdict(set)
     for row in sessions:
         semester = row.get('Semester', '')
-        group = row.get('Student_Group', '')
+        group = get_program_label(row)
         if semester and group:
             semester_groups[semester].add(group)
     
     print(f"📊 Semesters with scheduled classes:")
     for semester in sorted(semester_groups.keys()):
         group_count = len(semester_groups[semester])
-        print(f"   • {semester}: {group_count} student group(s)")
+        print(f"   • {semester}: {group_count} program(s)")
         if group_count == 0:
             violations.append({
                 'constraint': 'semester_no_classes',
@@ -785,7 +844,7 @@ def check_term_semester_alignment(sessions: List[Dict[str, str]], violations: Li
     for row in sessions:
         term = row.get('Term', '')
         semester = row.get('Semester', '')
-        group = row['Student_Group']
+        group = get_program_label(row)
         
         if term and semester:
             term_semester_map[group].add((term, semester))
@@ -795,10 +854,10 @@ def check_term_semester_alignment(sessions: List[Dict[str, str]], violations: Li
             alignment_issues += 1
             violations.append({
                 'constraint': 'term_semester_mismatch',
-                'student_group': group,
+                'program': group,
                 'term_semester_combinations': list(term_sem_pairs),
                 'severity': 'WARNING',
-                'message': f'Group {group} has sessions in multiple term/semester combinations'
+                'message': f'Program {group} has sessions in multiple term/semester combinations'
             })
     
     log_summary("Term/Semester alignment issues", alignment_issues, "proper alignment")
@@ -890,7 +949,7 @@ def main():
     # Soft constraints
     section("SOFT CONSTRAINTS")
     check_lecturer_loads(sessions, violations)
-    check_student_group_schedule_quality(sessions, violations)
+    check_program_schedule_quality(sessions, violations)
     check_room_utilization(sessions, violations)
     check_lecturer_specialization(sessions, violations)
     
