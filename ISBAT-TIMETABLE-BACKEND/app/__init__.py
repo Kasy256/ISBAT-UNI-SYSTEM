@@ -26,31 +26,42 @@ def create_app(config_class=Config):
     try:
         # Set connection timeout and read preferences to handle replica set issues
         # readPreference=secondaryPreferred allows reading from secondaries when primary is unavailable
-        mongo_uri = app.config['MONGO_URI']
+        mongo_uri = app.config.get('MONGO_URI')
         
-        # Add read preference to URI if not already present
-        if 'readPreference' not in mongo_uri:
-            separator = '&' if '?' in mongo_uri else '?'
-            mongo_uri = f"{mongo_uri}{separator}readPreference=secondaryPreferred"
-        
-        mongo_client = MongoClient(
-            mongo_uri,
-            serverSelectionTimeoutMS=10000,  # 10 second timeout (increased from 5)
-            connectTimeoutMS=10000,  # 10 second timeout (increased from 5)
-            socketTimeoutMS=30000,  # 30 second timeout for operations
-            retryWrites=True,
-            retryReads=True,
-            read_preference=ReadPreference.SECONDARY_PREFERRED  # Allow reading from secondaries
-        )
-        # Test connection with a more lenient approach
-        try:
-            mongo_client.admin.command('ping')
-        except Exception as ping_error:
-            # If ping fails, try to connect anyway - might be a replica set issue
-            print(f"Warning: Initial ping failed: {ping_error}")
-            print("Attempting to continue with connection...")
-        
-        db = mongo_client[app.config['MONGO_DB_NAME']]
+        if mongo_uri:
+            # Add read preference to URI if not already present
+            if 'readPreference' not in mongo_uri:
+                separator = '&' if '?' in mongo_uri else '?'
+                mongo_uri = f"{mongo_uri}{separator}readPreference=secondaryPreferred"
+            
+            mongo_client = MongoClient(
+                mongo_uri,
+                serverSelectionTimeoutMS=10000,
+                connectTimeoutMS=10000,
+                socketTimeoutMS=30000,
+                retryWrites=True,
+                retryReads=True,
+                read_preference=ReadPreference.SECONDARY_PREFERRED
+            )
+            
+            # Test connection with a timeout
+            try:
+                mongo_client.admin.command('ping')
+                print("✓ MongoDB connected successfully")
+            except Exception as ping_error:
+                print(f"Warning: Initial ping failed: {ping_error}")
+                print("Attempting to continue with connection...")
+            
+            db = mongo_client[app.config.get('MONGO_DB_NAME', 'timetable_scheduler')]
+        else:
+            print("Warning: MONGO_URI environment variable is not set.")
+            mongo_client = None
+            db = None
+            
+    except Exception as e:
+        print(f"✗ MongoDB initialization failed: {e}")
+        mongo_client = None
+        db = None
         
         # Create indexes for performance (handle errors gracefully)
         try:

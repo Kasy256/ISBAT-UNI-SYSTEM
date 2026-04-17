@@ -89,24 +89,25 @@ def login():
             }
         }), 200
         
-    except AuthError as e:
-        return jsonify({"error": e.message}), e.status_code
     except ConnectionError as e:
         # Pass through connection error details for diagnosis
         return jsonify({
             "error": "Database Connection Error",
             "message": str(e),
-            "details": "Connection to MongoDB failed. Check environment variables."
+            "diagnostics": "The backend cannot connect to MongoDB. This usually means MONGO_URI is missing or incorrect in Render environment variables."
         }), 503
+    except AuthError as e:
+        return jsonify({"error": e.message}), e.status_code
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        # Log the full error for debugging (in production, use proper logging)
         print(f"Login error: {str(e)}")
         print(f"Traceback: {error_details}")
         return jsonify({
             "error": "Internal Server Error",
-            "message": f"Login failed: {str(e)}"
+            "message": f"An unhandled error occurred: {str(e)}",
+            "type": type(e).__name__,
+            "advice": "Check if the database is connected and if the request payload is correct."
         }), 500
 
 
