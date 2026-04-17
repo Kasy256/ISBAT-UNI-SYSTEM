@@ -1,4 +1,4 @@
-﻿"""Room management routes."""
+"""Room management routes."""
 
 from flask import Blueprint, request, jsonify
 from app import get_db
@@ -48,8 +48,10 @@ def get_rooms():
             'rooms': rooms
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<room_number>', methods=['GET'])
@@ -69,8 +71,10 @@ def get_room(room_number):
             'room': room
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/', methods=['POST'])
@@ -132,8 +136,10 @@ def create_room():
             '_id': str(result.inserted_id)
         }), 201
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<room_number>', methods=['PUT'])
@@ -184,8 +190,10 @@ def update_room(room_number):
             'message': 'Room updated successfully'
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<room_number>', methods=['DELETE'])
@@ -204,8 +212,10 @@ def delete_room(room_number):
             'message': 'Room deleted successfully'
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/bulk', methods=['POST'])
@@ -259,8 +269,10 @@ def bulk_create_rooms():
             'count': len(result.inserted_ids)
         }), 201
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/search', methods=['POST'])
@@ -306,8 +318,10 @@ def search_rooms():
             'rooms': rooms
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/statistics', methods=['GET'])
@@ -357,6 +371,8 @@ def get_room_statistics():
             }
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 

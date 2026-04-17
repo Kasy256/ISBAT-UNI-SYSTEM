@@ -1,4 +1,4 @@
-﻿from flask import Flask
+from flask import Flask
 from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.read_preferences import ReadPreference
@@ -179,9 +179,11 @@ def create_app(config_class=Config):
         # Check if it's a database connection issue
         if mongo_client is None or db is None:
             return {
-                'error': 'Database connection unavailable',
-                'details': 'MongoDB is not connected. Check MONGO_URI environment variable and MongoDB cluster status.',
-                'setup': 'See RENDER_SETUP.md for configuration instructions'
+                'error': 'Database Connection Unavailable',
+                'status': 503,
+                'details': 'The application cannot connect to MongoDB. This is usually due to missing or incorrect MONGO_URI in environment variables.',
+                'action_required': 'Set MONGO_URI and MONGO_DB_NAME in your Render dashboard settings.',
+                'setup_guide': 'See RENDER_SETUP.md in the repository root for instructions.'
             }, 503
         
         # Log the full traceback for debugging
@@ -189,16 +191,25 @@ def create_app(config_class=Config):
         print(traceback.format_exc())
         
         return {
-            'error': 'Internal server error',
-            'message': error_msg if app.config.get('DEBUG') else 'An unexpected error occurred'
+            'error': 'Internal Server Error',
+            'status': 500,
+            'message': error_msg if app.config.get('DEBUG') else 'An unexpected error occurred during processing.'
         }, 500
     
     return app
 
 def get_db():
-    """Get database instance"""
+    """Get database instance with explicit connection check"""
     if db is None:
+        # Check if it's a configuration issue
+        from app.config import Config
+        mongo_uri = Config.MONGO_URI
+        
+        error_msg = "MongoDB connection not available."
+        if not mongo_uri or "philiphinny436" in mongo_uri:
+            error_msg += " It appears the MONGO_URI is using a default or missing configuration."
+            
         raise ConnectionError(
-            "MongoDB connection not available. Please check your connection settings and ensure MongoDB is accessible."
+            f"{error_msg} Please ensure MONGO_URI is set correctly in your environment variables."
         )
     return db

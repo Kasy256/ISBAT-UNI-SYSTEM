@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify
 from app import get_db
 from app.models.lecturer import Lecturer
 from app.middleware.auth import require_auth
@@ -18,8 +18,10 @@ def get_lecturers():
             lec['_id'] = str(lec['_id'])
         
         return jsonify({'lecturers': lecturers}), 200
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/<lecturer_id>', methods=['GET'])
 def get_lecturer(lecturer_id):
@@ -33,8 +35,10 @@ def get_lecturer(lecturer_id):
         
         lecturer['_id'] = str(lecturer['_id'])
         return jsonify(lecturer), 200
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/', methods=['POST'])
 def create_lecturer():
@@ -79,8 +83,10 @@ def create_lecturer():
             '_id': str(result.inserted_id)
         }), 201
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/<lecturer_id>', methods=['PUT'])
 def update_lecturer(lecturer_id):
@@ -99,8 +105,10 @@ def update_lecturer(lecturer_id):
         
         return jsonify({'message': 'Lecturer updated successfully'}), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/<lecturer_id>', methods=['DELETE'])
 def delete_lecturer(lecturer_id):
@@ -114,8 +122,10 @@ def delete_lecturer(lecturer_id):
         
         return jsonify({'message': 'Lecturer deleted successfully'}), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/bulk', methods=['POST'])
 def bulk_create_lecturers():
@@ -137,5 +147,7 @@ def bulk_create_lecturers():
             'count': len(result.inserted_ids)
         }), 201
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500

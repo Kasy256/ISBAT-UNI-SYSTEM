@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify
 from app import get_db
 from app.models.subject import CourseUnit
 
@@ -15,8 +15,10 @@ def get_courses():
             subject['_id'] = str(subject['_id'])
         
         return jsonify({'subjects': subjects}), 200
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/<course_id>', methods=['GET'])
 def get_course(course_id):
@@ -30,8 +32,10 @@ def get_course(course_id):
         
         subject['_id'] = str(subject['_id'])
         return jsonify(subject), 200
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/', methods=['POST'])
 def create_course():
@@ -74,8 +78,10 @@ def create_course():
             '_id': str(result.inserted_id)
         }), 201
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/<course_id>', methods=['PUT'])
 def update_course(course_id):
@@ -106,8 +112,10 @@ def update_course(course_id):
         
         return jsonify({'message': 'Subject updated successfully'}), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/<course_id>', methods=['DELETE'])
 def delete_course(course_id):
@@ -121,8 +129,10 @@ def delete_course(course_id):
         
         return jsonify({'message': 'Subject deleted successfully'}), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/bulk', methods=['POST'])
 def bulk_create_courses():
@@ -144,5 +154,7 @@ def bulk_create_courses():
             'count': len(result.inserted_ids)
         }), 201
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500

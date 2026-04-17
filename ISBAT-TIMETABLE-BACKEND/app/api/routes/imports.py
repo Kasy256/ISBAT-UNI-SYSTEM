@@ -272,9 +272,11 @@ def import_lecturers():
             'skipped_details': skipped[:20]
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
         print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/subjects', methods=['POST'])
@@ -428,9 +430,11 @@ def import_subjects():
             'skipped_details': skipped[:20]
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
         print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/rooms', methods=['POST'])
@@ -583,9 +587,11 @@ def import_rooms():
             'skipped_details': skipped[:20]
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
         print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/programs', methods=['POST'])
@@ -794,9 +800,11 @@ def import_programs():
             'skipped_details': skipped[:20]
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
         print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/canonical-groups', methods=['POST'])
@@ -918,7 +926,9 @@ def import_canonical_groups():
             'skipped_details': skipped[:20]
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
         print(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 

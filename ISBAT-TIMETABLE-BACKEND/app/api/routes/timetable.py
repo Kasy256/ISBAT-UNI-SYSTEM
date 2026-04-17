@@ -443,6 +443,8 @@ def generate_timetable():
             'verification_output': verification_output
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
         error_msg = f"Error generating timetable: {str(e)}"
         error_traceback = traceback.format_exc()
@@ -454,7 +456,8 @@ def generate_timetable():
         print(error_traceback)
         print(f"{'='*70}\n")
         return jsonify({
-            'error': str(e),
+            'error': "Internal Server Error",
+            'message': str(e),
             'traceback': error_traceback
         }), 500
 
@@ -788,5 +791,7 @@ def get_resource_availability():
             'availability': availability
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500

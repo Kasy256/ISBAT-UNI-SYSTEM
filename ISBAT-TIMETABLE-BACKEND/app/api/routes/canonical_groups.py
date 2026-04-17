@@ -19,8 +19,10 @@ def get_canonical_groups():
             group['_id'] = str(group['_id'])
         
         return jsonify({'canonical_groups': groups}), 200
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<canonical_id>', methods=['GET'])
@@ -35,8 +37,10 @@ def get_canonical_group(canonical_id: str):
         
         group['_id'] = str(group['_id'])
         return jsonify(group), 200
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/', methods=['POST'])
@@ -80,8 +84,10 @@ def create_canonical_group():
             '_id': str(result.inserted_id)
         }), 201
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<canonical_id>', methods=['PUT'])
@@ -105,8 +111,10 @@ def update_canonical_group(canonical_id: str):
         
         return jsonify({'message': 'Canonical group updated successfully'}), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<canonical_id>', methods=['DELETE'])
@@ -121,8 +129,10 @@ def delete_canonical_group(canonical_id: str):
         
         return jsonify({'message': 'Canonical group deleted successfully'}), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<canonical_id>/subjects', methods=['GET'])
@@ -148,6 +158,8 @@ def get_courses_in_group(canonical_id: str):
             'subjects': subjects
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
