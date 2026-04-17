@@ -53,7 +53,7 @@ export default function Login() {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">
-            ISBAT Timetable System
+            Cartlyf Timetable System
           </CardTitle>
           <CardDescription className="text-center">
             Sign in to access the timetable management system
@@ -102,7 +102,7 @@ export default function Login() {
             </Button>
           </form>
           <p className="mt-4 text-xs text-center text-muted-foreground">
-            Default: admin@isbat.ac.ug / Admin@123
+            Default: admin@Cartlyf.ac.ug / Admin@123
           </p>
         </CardContent>
       </Card>

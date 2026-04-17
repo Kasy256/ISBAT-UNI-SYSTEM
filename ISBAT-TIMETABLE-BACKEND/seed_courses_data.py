@@ -1,10 +1,10 @@
-"""Seed course unit data for ISBAT Timetable System - UPDATED WITH CLIENT SUBJECT NAMES"""
+"""Seed course unit data for Cartlyf Timetable System - UPDATED WITH CLIENT SUBJECT NAMES"""
 
 from typing import List, Dict
 
 def get_all_courses() -> List[Dict]:
     """
-    Get all course unit data for Computing Faculty programs at ISBAT University Kampala
+    Get all course unit data for Computing Faculty programs at Cartlyf tt Kampala
     Programs: BSCAIT, BCS
     All semesters S1-S6
     
@@ -1307,7 +1307,7 @@ if __name__ == '__main__':
     stats = get_course_statistics()
     
     print("\n" + "="*60)
-    print("ISBAT SUBJECT STATISTICS - UPDATED WITH CLIENT SUBJECT NAMES")
+    print("Cartlyf SUBJECT STATISTICS - UPDATED WITH CLIENT SUBJECT NAMES")
     print("="*60)
     print(f"\n📚 Total Subjects: {stats['total_courses']}")
     

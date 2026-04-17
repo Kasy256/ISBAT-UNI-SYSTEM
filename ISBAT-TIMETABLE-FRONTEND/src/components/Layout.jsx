@@ -94,8 +94,8 @@ export default function Layout({ children }) {
         {/* Logo Section - White Background */}
         <div className="bg-white border-b border-primary-light p-6 flex-shrink-0">
           <img
-            src="/isbat-university-logo.png"
-            alt="ISBAT University"
+            src="/Cartlyf-tt-logo.png"
+            alt="Cartlyf tt"
             className="max-w-full h-12 object-contain"
           />
         </div>
@@ -108,7 +108,7 @@ export default function Layout({ children }) {
 
       {/* Mobile/Tablet Header & Sidebar */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-border/40 h-16 flex items-center justify-between px-4">
-        <img src="/isbat-university-logo.png" alt="ISBAT University" className="h-10 object-contain" />
+        <img src="/Cartlyf-tt-logo.png" alt="Cartlyf tt" className="h-10 object-contain" />
 
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetTrigger asChild>
@@ -120,8 +120,8 @@ export default function Layout({ children }) {
             {/* Logo in Mobile Menu */}
             <div className="bg-white border-b border-primary-light p-6 flex-shrink-0">
               <img
-                src="/isbat-university-logo.png"
-                alt="ISBAT University"
+                src="/Cartlyf-tt-logo.png"
+                alt="Cartlyf tt"
                 className="h-12 object-contain"
               />
             </div>

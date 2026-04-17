@@ -1,11 +1,11 @@
-"""Seed lecturer data for ISBAT Timetable System based on client-provided data"""
+"""Seed lecturer data for Cartlyf Timetable System based on client-provided data"""
 
 from typing import List, Dict
 
 
 def get_all_lecturers() -> List[Dict]:
     """
-    Get all lecturer data for ISBAT based on client-provided list.
+    Get all lecturer data for Cartlyf based on client-provided list.
     
     Updated to match exact client data from provided JSON.
 
@@ -285,7 +285,7 @@ if __name__ == '__main__':
     stats = get_lecturer_statistics()
 
     print("\n" + "="*60)
-    print("ISBAT LECTURER STATISTICS")
+    print("Cartlyf LECTURER STATISTICS")
     print("="*60)
     print(f"\nTotal Lecturers: {stats['total_lecturers']}")
 

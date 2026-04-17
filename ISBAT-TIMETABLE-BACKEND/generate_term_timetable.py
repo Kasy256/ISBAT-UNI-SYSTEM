@@ -1,5 +1,5 @@
 """
-Generate Term-Based University Timetable
+Generate Term-Based tt Timetable
 Generates timetables for a SPECIFIC TERM (Term1 or Term2) across ALL semesters
 All programs share the same academic terms
 """
@@ -80,7 +80,7 @@ def fetch_all_data(db, faculty: str = None):
     Returns:
         Tuple of (student_groups, courses, lecturers, rooms)
     """
-    print("\n📥 Loading university data...")
+    print("\n📥 Loading tt data...")
     if faculty:
         print(f"   🎓 Filtering by faculty: {faculty}")
     
@@ -1299,7 +1299,7 @@ def generate_statistics(assignments, courses, lecturers, rooms, csv_filename, te
 def main():
     """Main execution with command-line interface"""
     parser = argparse.ArgumentParser(
-        description='Generate term-based university timetable',
+        description='Generate term-based tt timetable',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

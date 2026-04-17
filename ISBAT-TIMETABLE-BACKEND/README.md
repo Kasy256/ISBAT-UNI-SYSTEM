@@ -1,4 +1,4 @@
-﻿# University Timetable Scheduling System
+﻿# tt Timetable Scheduling System
 
 An enterprise-grade automated timetable scheduling system using CSP (Constraint Satisfaction Problem) and GGA (Guided Genetic Algorithm) with JWT authentication and comprehensive validation.
 

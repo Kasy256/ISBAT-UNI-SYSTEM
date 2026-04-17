@@ -1,4 +1,4 @@
-"""Seed program data for ISBAT Timetable System - UPDATED WITH REAL SUBJECTS"""
+"""Seed program data for Cartlyf Timetable System - UPDATED WITH REAL SUBJECTS"""
 
 from typing import List, Dict
 
@@ -575,7 +575,7 @@ if __name__ == '__main__':
     shared = get_shared_courses_summary()
     
     print("\n" + "="*70)
-    print("ISBAT UNIVERSITY - PROGRAM DATA (UPDATED WITH REAL SUBJECTS)")
+    print("Cartlyf tt - PROGRAM DATA (UPDATED WITH REAL SUBJECTS)")
     print("="*70)
     print(f"\n👥 Total Programs: {stats['total_groups']} (semester groups)")
     
