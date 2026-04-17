@@ -172,7 +172,26 @@ def create_app(config_class=Config):
     
     @app.errorhandler(500)
     def internal_error(error):
-        return {'error': 'Internal server error'}, 500
+        """Enhanced error handler with database diagnostics"""
+        import traceback
+        error_msg = str(error)
+        
+        # Check if it's a database connection issue
+        if mongo_client is None or db is None:
+            return {
+                'error': 'Database connection unavailable',
+                'details': 'MongoDB is not connected. Check MONGO_URI environment variable and MongoDB cluster status.',
+                'setup': 'See RENDER_SETUP.md for configuration instructions'
+            }, 503
+        
+        # Log the full traceback for debugging
+        print(f"500 Error: {error_msg}")
+        print(traceback.format_exc())
+        
+        return {
+            'error': 'Internal server error',
+            'message': error_msg if app.config.get('DEBUG') else 'An unexpected error occurred'
+        }, 500
     
     return app
 
