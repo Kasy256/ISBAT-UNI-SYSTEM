@@ -1,4 +1,4 @@
-﻿"""
+"""
 Master data seeding script for Cartlyf Timetable Scheduler
 Uses modular seed data files for cleaner organization
 """
@@ -34,7 +34,7 @@ def seed_all():
         db = client[db_name]
         print(f"Connected to MongoDB: {db_name}\n")
     except Exception as e:
-        print(f"❌ Failed to connect to MongoDB: {e}")
+        print(f"FAILED to connect to MongoDB: {e}")
         return False
     
     # Clear existing data

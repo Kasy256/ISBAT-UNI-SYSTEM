@@ -137,73 +137,123 @@ class CSPEngine:
         
         course_group_variables: Dict[str, Dict[int, List[SchedulingVariable]]] = defaultdict(lambda: defaultdict(list))
         
+        # Phase 1: Group courses by canonical group + session number to identify merging opportunities
+        # This replaces the old "linked pairs" approach with a "single merged variable" approach
+        # which is much more efficient for the CSP solver.
+        merge_tasks: Dict[tuple, Dict[str, Any]] = {}  # (canonical_id, session_num) -> details
+        
         for program in programs:
             course_ids = []
             for cu in program.course_units:
-                # Extract course code (handles "CODE - Name" format)
                 if isinstance(cu, dict):
                     course_id = cu.get('code') or cu.get('id')
-                    if course_id:
-                        course_ids.append(course_id.strip())
+                    if course_id: course_ids.append(course_id.strip())
                 elif isinstance(cu, str):
-                    # Extract code from "CODE - Name" format
                     if " - " in cu:
-                        course_code = cu.split(" - ")[0].strip()
-                        course_ids.append(course_code)
+                        course_ids.append(cu.split(" - ")[0].strip())
                     else:
                         course_ids.append(cu.strip())
             
             for course_unit_id in course_ids:
                 course_unit = self.course_units.get(course_unit_id)
-                if not course_unit:
-                    continue
+                if not course_unit: continue
                 
+                canonical_id = get_canonical_id(course_unit_id) or course_unit_id
                 sessions_needed = course_unit.sessions_required
                 
                 for session_num in range(1, sessions_needed + 1):
-                    variable = SchedulingVariable(
-                        id=f"VAR_{var_id}",
-                        course_unit_id=course_unit.id,
-                        program_id=program.id,
-                        term=program.term,
-                        session_number=session_num,
-                        sessions_required=sessions_needed
-                    )
+                    # Key for merging: same subject group (canonical) + same session sequence
+                    merge_key = (canonical_id, session_num)
                     
-                    self.domain_manager.initialize_variable_domains(
-                        variable, lecturers, rooms, course_unit, program
-                    )
+                    if merge_key not in merge_tasks:
+                        merge_tasks[merge_key] = {
+                            'canonical_id': canonical_id,
+                            'session_num': session_num,
+                            'total_size': 0,
+                            'program_ids': [],
+                            'course_unit_id': course_unit_id, # Representative ID
+                            'sessions_required': sessions_needed,
+                            'programs': []
+                        }
                     
-                    # Use canonical subject mapping as source of truth for pairing
-                    # Group variables by canonical ID (canonical subjects are already unified units)
-                    canonical_id = get_canonical_id(course_unit.id) or course_unit.id
-                    if canonical_id in CANONICAL_COURSE_MAPPING:
-                        # This is a canonical subject - group by canonical ID
-                        course_group_variables[canonical_id][session_num].append(variable)
-                    elif course_unit.course_group:
-                        # Fallback to course_group for non-canonical subjects
-                        course_group_variables[course_unit.course_group][session_num].append(variable)
-                    
-                    self.variables.append(variable)
-                    
-                    # Store variable to program mapping in constraint context
-                    self.constraint_context.variable_to_program[variable.id] = program.id
-                    
-                    # Track which original groups this variable belongs to
-                    # If this is a merged group, track variables for all original groups
-                    if program.id in self.merged_to_original_groups:
-                        original_group_ids = self.merged_to_original_groups[program.id]
-                        for orig_group_id in original_group_ids:
-                            if orig_group_id not in self.original_group_variables:
-                                self.original_group_variables[orig_group_id] = []
-                            self.original_group_variables[orig_group_id].append(variable.id)
-                    else:
-                        # Not a merged group, track directly
-                        if program.id not in self.original_group_variables:
-                            self.original_group_variables[program.id] = []
-                        self.original_group_variables[program.id].append(variable.id)
-                    
-                    var_id += 1
+                    # Add this program to the merged task
+                    task = merge_tasks[merge_key]
+                    if program.id not in task['program_ids']:
+                        task['program_ids'].append(program.id)
+                        task['programs'].append(program)
+                        task['total_size'] += program.size
+
+        # Phase 2: Create variables from merged tasks
+        self.variables = []
+        var_id = 1
+        
+        # We also need to create "Merged Programs" in the context so capacity checks work
+        for merge_key, task in merge_tasks.items():
+            canonical_id, session_num = merge_key
+            
+            # If multiple programs are merged, create a unique ID for this specific group combination
+            if len(task['program_ids']) > 1:
+                # Sort IDs for consistency
+                sorted_ids = sorted(task['program_ids'])
+                merged_prog_id = f"MERGED_{'_'.join(sorted_ids)}"
+                
+                # Register this merged program in the context if not already there
+                if merged_prog_id not in self.constraint_context.programs:
+                    self.constraint_context.programs[merged_prog_id] = {
+                        'id': merged_prog_id,
+                        'size': task['total_size']
+                    }
+                    # Track mappings for conflict checking
+                    self.merged_to_original_groups[merged_prog_id] = task['program_ids']
+                    for orig_id in task['program_ids']:
+                        if orig_id not in self.original_to_merged_groups:
+                            self.original_to_merged_groups[orig_id] = []
+                        self.original_to_merged_groups[orig_id].append(merged_prog_id)
+                
+                active_program_id = merged_prog_id
+            else:
+                active_program_id = task['program_ids'][0]
+
+            # Create the actual CSP variable
+            variable = SchedulingVariable(
+                id=f"VAR_{var_id}",
+                course_unit_id=task['course_unit_id'],
+                program_id=active_program_id,
+                term=task['programs'][0].term,
+                session_number=task['session_num'],
+                sessions_required=task['sessions_required']
+            )
+            
+            # Initialize domain using the representative program (for campus/term logic) 
+            # and the total size (for room capacity logic)
+            self.domain_manager.initialize_variable_domains(
+                variable, lecturers, rooms, 
+                self.course_units[task['course_unit_id']], 
+                task['programs'][0] # Representative program for campus constraints
+            )
+            
+            # CRITICAL: Since initialize_variable_domains uses program.size, 
+            # we must ensure it accounted for task['total_size'] if it was merged.
+            # Let's adjust available_rooms if it's a merged task.
+            if len(task['program_ids']) > 1:
+                variable.available_rooms = {
+                    r.room_number for r in rooms 
+                    if r.capacity >= task['total_size'] and 
+                    self.domain_manager._is_room_suitable(r, self.course_units[task['course_unit_id']], None)
+                }
+
+            self.variables.append(variable)
+            self.constraint_context.variable_to_program[variable.id] = active_program_id
+            
+            # Track variables for each original group involved
+            for orig_id in task['program_ids']:
+                if orig_id not in self.original_group_variables:
+                    self.original_group_variables[orig_id] = []
+                self.original_group_variables[orig_id].append(variable.id)
+                
+            var_id += 1
+
+        print(f"Initialized CSP with {len(self.variables)} merged variables (reduced from original program-specific count)")
         
         # Build variable pairs using canonical mapping as source of truth
         self.variable_pairs: Dict[str, List[str]] = {}

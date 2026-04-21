@@ -1,4 +1,4 @@
-﻿"""CSP Constraint definitions for timetable scheduling."""
+"""CSP Constraint definitions for timetable scheduling."""
 
 from typing import Dict, List, Set, Optional, Any
 from dataclasses import dataclass
@@ -71,6 +71,8 @@ class ConstraintContext:
         self.merged_to_original_groups: Dict[str, List[str]] = merged_to_original_groups or {}
         self.original_to_merged_groups: Dict[str, List[str]] = original_to_merged_groups or {}
         self.variable_to_program: Dict[str, str] = {}  # variable_id -> program_id
+        self.stress_mode: bool = False # If True, certain constraints are relaxed
+
     
     def add_assignment(self, assignment: Assignment):
         """Add assignment and update indices"""
@@ -415,8 +417,12 @@ class RoomTypeConstraint(Constraint):
         
         # STRICT: Subject MUST use the required room type
         if room_type != required_room_type:
-            # HARD CONSTRAINT: Room type must match subject type
-            # Lab subjects MUST use Lab rooms, Theory subjects MUST use Theory rooms
+            # RELAXED in stress mode: Allow Theory in Lab, but NOT Lab in Theory
+            if context.stress_mode:
+                if required_room_type == 'Theory' and room_type == 'Lab':
+                    return True # Allow theory in empty labs
+            
+            # HARD CONSTRAINT (otherwise)
             return False
         else:
             # Room type matches - always valid
@@ -491,11 +497,16 @@ class DailyLimitConstraint(Constraint):
         # Get current daily count
         current_count = context.lecturer_daily_count.get(lecturer_id, {}).get(day, 0)
         
-        # Maximum 2 sessions per day
-        if current_count >= 2:
+        # Maximum 2 sessions per day (Relaxed to 3 in stress mode)
+        max_daily = 3 if context.stress_mode else 2
+        if current_count >= max_daily:
             return False
         
         # Check morning/afternoon rule: max 1 morning + 1 afternoon
+        # Skip this check in stress mode to allow back-to-back if needed
+        if context.stress_mode:
+            return True
+
         is_afternoon = assignment.time_slot.is_afternoon
         morning_used = context.lecturer_morning_used.get(lecturer_id, {}).get(day, False)
         afternoon_used = context.lecturer_afternoon_used.get(lecturer_id, {}).get(day, False)
