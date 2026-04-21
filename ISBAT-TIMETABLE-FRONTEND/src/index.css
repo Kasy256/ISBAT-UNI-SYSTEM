@@ -8,7 +8,7 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* ISBAT University Theme - Professional Academic Design */
+    /* Cartlyf tt Theme - Professional Academic Design */
     --background: 0 0% 97%;
     --foreground: 0 0% 17%;
 
@@ -18,8 +18,8 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 17%;
 
-    /* Primary - ISBAT Red */
-    --primary: 352 98% 34%;
+    /* Primary - Cartlyf Red */
+    --primary: 210 80% 30%;
     --primary-foreground: 0 0% 100%;
     --primary-light: 352 98% 94%;
     --primary-hover: 352 98% 30%;

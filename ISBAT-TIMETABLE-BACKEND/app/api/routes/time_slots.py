@@ -20,8 +20,10 @@ def get_time_slots():
             slot['_id'] = str(slot['_id'])
         
         return jsonify({'time_slots': time_slots}), 200
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/<period>', methods=['GET'])
 def get_time_slot(period):
@@ -35,8 +37,10 @@ def get_time_slot(period):
         
         time_slot['_id'] = str(time_slot['_id'])
         return jsonify(time_slot), 200
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/', methods=['POST'])
 @require_auth
@@ -131,8 +135,10 @@ def update_time_slot(period):
         
         return jsonify({'message': 'Time slot updated successfully'}), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/<period>', methods=['DELETE'])
 @require_auth
@@ -154,5 +160,7 @@ def delete_time_slot(period):
         
         return jsonify({'message': 'Time slot deleted successfully'}), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500

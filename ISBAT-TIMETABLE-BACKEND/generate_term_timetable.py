@@ -1,5 +1,5 @@
 """
-Generate Term-Based University Timetable
+Generate Term-Based tt Timetable
 Generates timetables for a SPECIFIC TERM (Term1 or Term2) across ALL semesters
 All programs share the same academic terms
 """
@@ -80,7 +80,7 @@ def fetch_all_data(db, faculty: str = None):
     Returns:
         Tuple of (student_groups, courses, lecturers, rooms)
     """
-    print("\n📥 Loading university data...")
+    print("\n📥 Loading tt data...")
     if faculty:
         print(f"   🎓 Filtering by faculty: {faculty}")
     
@@ -1078,13 +1078,17 @@ def generate_term_timetable(term_number):
                 print(f"      ... and {len(room_type_violations) - 5} more")
         
         # Export
-        update_progress(term_number, 90, "Exporting", "Writing CSV file...")
+        update_progress(term_number, 85, "Exporting", "Writing CSV file...")
         filename = f'TIMETABLE_TERM{term_number}_COMPLETE.csv'
         export_to_csv(assignment_dicts, courses, lecturers, rooms, filename, term_number)
         
         # Generate statistics
-        update_progress(term_number, 95, "Generating Statistics", "Generating summary statistics...")
+        update_progress(term_number, 90, "Generating Statistics", "Generating summary statistics...")
         generate_statistics(assignment_dicts, courses, lecturers, rooms, filename, term_number)
+        
+        # Save to Database
+        update_progress(term_number, 95, "Saving to DB", "Uploading final timetable to database...")
+        save_timetable_to_db(db, assignment_dicts, courses, term_number)
         
         # Close connection
         client.close()
@@ -1299,7 +1303,7 @@ def generate_statistics(assignments, courses, lecturers, rooms, csv_filename, te
 def main():
     """Main execution with command-line interface"""
     parser = argparse.ArgumentParser(
-        description='Generate term-based university timetable',
+        description='Generate term-based tt timetable',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -1357,6 +1361,119 @@ Examples:
         import traceback
         traceback.print_exc()
         sys.exit(1)  # Failure
+
+def save_timetable_to_db(db, assignment_dicts, courses, term_number):
+    """
+    Parse the assignments and save them to the database.
+    This logic mimics the previous logic in the Flask route but runs in the background.
+    """
+    from datetime import datetime
+    
+    # Pre-fetch all lecturers to get faculty information
+    lecturers_cache = {}
+    lecturers_data = db.lecturers.find({})
+    for lecturer in lecturers_data:
+        lecturers_cache[lecturer.get('id')] = {
+            'faculty': lecturer.get('faculty', ''),
+            'name': lecturer.get('name', ''),
+            'role': lecturer.get('role', '')
+        }
+    
+    # Organize by program
+    timetable_data = {}
+    sessions_list = []
+    
+    # helper to match time slots
+    time_slots = list(db.time_slots.find())
+    
+    for row in assignment_dicts:
+        # row is a dict from expand_assignment_dicts
+        program_name = row.get('student_group_name', '')
+        if not program_name: continue
+        
+        # Extract program code (BIT, BCS, etc)
+        program_code = ''
+        parts = program_name.split('_')
+        if len(parts) > 0:
+            program_raw = parts[0]
+            if program_raw == 'BSCAIT': program_code = 'BIT'
+            elif program_raw == 'BCS': program_code = 'BCS'
+            else: program_code = program_raw
+            
+        if not program_code: continue
+        if program_code not in timetable_data:
+            timetable_data[program_code] = []
+            
+        # Match time slot
+        ts = row.get('time_slot', {})
+        period = ts.get('period', '')
+        if not period:
+            for slot in time_slots:
+                if slot.get('start') == ts.get('start') and slot.get('end') == ts.get('end'):
+                    period = slot.get('period', '')
+                    break
+        
+        lecturer_id = row.get('lecturer_id', '')
+        lecturer_info = lecturers_cache.get(lecturer_id, {})
+        
+        session = {
+            'session_id': row.get('session_id', ''),
+            'course_unit': {
+                'id': row.get('course_id', ''),
+                'code': row.get('course_id', ''), # Assuming course_id acts as code here
+                'name': row.get('Course_Name', 'N/A'),
+                'preferred_room_type': row.get('Course_Type', 'Theory'),
+                'credits': row.get('Credits', 0)
+            },
+            'lecturer': {
+                'id': lecturer_id,
+                'name': row.get('Lecturer_Name', lecturer_info.get('name', '')),
+                'role': row.get('Lecturer_Role', lecturer_info.get('role', '')),
+                'faculty': lecturer_info.get('faculty', '')
+            },
+            'room': {
+                'id': row.get('room_id', ''),
+                'number': row.get('Room_Number', row.get('room_id', '')),
+                'capacity': row.get('Room_Capacity', 0),
+                'type': row.get('Room_Type', 'Theory'),
+                'campus': row.get('Room_Campus', 'N/A')
+            },
+            'time_slot': {
+                'day': row.get('day', ''),
+                'period': period,
+                'start': ts.get('start', ''),
+                'end': ts.get('end', ''),
+                'time_slot': f"{ts.get('start', '')}-{ts.get('end', '')}"
+            },
+            'term': f'Term{term_number}',
+            'semester': row.get('semester', ''),
+            'program': program_code,
+            'program_name': program_name,
+            'group_size': row.get('group_size', 0),
+            'student_size': row.get('group_size', 0),
+            'session_number': row.get('session_number', 1)
+        }
+        
+        timetable_data[program_code].append(session)
+        sessions_list.append(session)
+        
+    # Final document
+    timetable_doc = {
+        'term': f'Term{term_number}',
+        'timetable': timetable_data,
+        'statistics': {
+            'total_sessions': len(sessions_list),
+            'programs': len(timetable_data),
+            'generated_at': datetime.utcnow().isoformat()
+        },
+        'optimized': True, 
+        'created_at': datetime.utcnow()
+    }
+    
+    # Save to MongoDB (Clearing existing for same term if necessary, 
+    # though usually we just append or user deletes manually)
+    db.timetables.insert_one(timetable_doc)
+    print(f"   ✅ Successfully saved Term {term_number} timetable to database!")
 
 if __name__ == '__main__':
     main()

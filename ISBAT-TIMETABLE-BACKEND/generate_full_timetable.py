@@ -1,5 +1,5 @@
 """
-Generate Complete University Timetable
+Generate Complete tt Timetable
 Generates timetables for ALL programs across all semesters and terms
 """
 
@@ -28,14 +28,14 @@ def setup_database():
     db = client[db_name]
     
     print("\n" + "="*70)
-    print("          COMPREHENSIVE UNIVERSITY TIMETABLE GENERATION")
+    print("          COMPREHENSIVE tt TIMETABLE GENERATION")
     print("="*70)
     
     return client, db
 
 def fetch_all_data(db):
     """Fetch all data from database"""
-    print("\n📥 Loading university data...")
+    print("\n📥 Loading tt data...")
     
     # Load all programs
     programs_data = list(db.programs.find({'is_active': True}))
@@ -212,8 +212,8 @@ def generate_timetable_for_group(program, subjects, lecturers, rooms, all_assign
     
     return group_assignments
 
-def export_full_timetable(all_assignments, subjects, lecturers, rooms, filename='FULL_UNIVERSITY_TIMETABLE.csv'):
-    """Export complete university timetable to CSV"""
+def export_full_timetable(all_assignments, subjects, lecturers, rooms, filename='FULL_tt_TIMETABLE.csv'):
+    """Export complete tt timetable to CSV"""
     
     print(f"\n{'='*70}")
     print("                    📊 EXPORTING FULL TIMETABLE")
@@ -294,7 +294,7 @@ def generate_statistics(all_assignments, subjects, lecturers, rooms, csv_filenam
     
     with open(summary_filename, 'w', encoding='utf-8') as f:
         f.write("="*70 + "\n")
-        f.write("          UNIVERSITY TIMETABLE - COMPREHENSIVE SUMMARY\n")
+        f.write("          tt TIMETABLE - COMPREHENSIVE SUMMARY\n")
         f.write("="*70 + "\n\n")
         
         f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -372,7 +372,7 @@ def main():
         # Export complete timetable
         if all_assignments:
             export_full_timetable(all_assignments, subjects, lecturers, rooms,
-                                filename='TIMETABLE_UNIVERSITY_COMPLETE.csv')
+                                filename='TIMETABLE_tt_COMPLETE.csv')
         else:
             print("\n❌ No assignments generated!")
         
@@ -390,9 +390,9 @@ def main():
         print(f"   • Programs: {len(programs)}")
         print(f"   • Time Elapsed: {elapsed:.2f} seconds")
         print(f"\n📁 Output Files:")
-        print(f"   • TIMETABLE_UNIVERSITY_COMPLETE.csv")
-        print(f"   • TIMETABLE_UNIVERSITY_COMPLETE_SUMMARY.txt")
-        print(f"\n🎉 University timetable successfully generated!")
+        print(f"   • TIMETABLE_tt_COMPLETE.csv")
+        print(f"   • TIMETABLE_tt_COMPLETE_SUMMARY.txt")
+        print(f"\n🎉 tt timetable successfully generated!")
         print("="*70 + "\n")
         
     except Exception as e:

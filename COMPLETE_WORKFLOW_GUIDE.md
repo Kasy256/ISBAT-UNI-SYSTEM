@@ -1,8 +1,8 @@
-# Complete Workflow Guide: Full University Timetable Generation
+# Complete Workflow Guide: Full tt Timetable Generation
 
 ## 🎯 **Overview**
 
-This guide explains how the system works when you import full university data and generate timetables for the entire university using the new scalable per-faculty approach.
+This guide explains how the system works when you import full tt data and generate timetables for the entire tt using the new scalable per-faculty approach.
 
 ---
 
@@ -10,7 +10,7 @@ This guide explains how the system works when you import full university data an
 
 ### **PHASE 1: Data Import (One-Time Setup)**
 
-#### **Step 1: Import All University Data**
+#### **Step 1: Import All tt Data**
 
 Import your data in this order:
 
@@ -25,14 +25,14 @@ Import your data in this order:
    ```
    POST /api/import/rooms
    ```
-   - All university rooms (shared across all faculties)
+   - All tt rooms (shared across all faculties)
    - Example: L201 (Lab, 60 capacity), T301 (Theory, 100 capacity)
 
 3. **Import Lecturers**
    ```
    POST /api/import/lecturers
    ```
-   - All university lecturers (can teach across faculties)
+   - All tt lecturers (can teach across faculties)
    - Each lecturer has: ID, name, role, faculty, specializations, availability
 
 4. **Import Course Units (Subjects)**
@@ -104,7 +104,7 @@ Content-Type: application/json
      - Zero conflicts guaranteed!
 
 **Result:**
-- Complete university timetable for Term 1
+- Complete tt timetable for Term 1
 - All faculties scheduled
 - No conflicts between faculties
 - All data saved in database
@@ -163,9 +163,9 @@ POST /api/timetable/generate/faculty
 
 ---
 
-## 🔄 **Complete Example: Full University Setup**
+## 🔄 **Complete Example: Full tt Setup**
 
-### **Scenario: University with 5 Faculties, 25 Programs**
+### **Scenario: tt with 5 Faculties, 25 Programs**
 
 **Data Structure:**
 ```
@@ -402,7 +402,7 @@ Fast conflict checking:
 
 ## 🚀 **Performance Expectations**
 
-### **For Full University (5 Faculties, 66 Programs):**
+### **For Full tt (5 Faculties, 66 Programs):**
 
 | Metric | Value |
 |--------|-------|
@@ -459,7 +459,7 @@ Fast conflict checking:
 
 ### **Complete Workflow:**
 
-1. **Import Data** → All university data with Faculty field
+1. **Import Data** → All tt data with Faculty field
 2. **Generate Term 1** → All faculties, conflict-free
 3. **Generate Term 2** → All faculties, conflict-free
 4. **View/Export** → Access timetables anytime
@@ -470,18 +470,18 @@ Fast conflict checking:
 ✅ **Zero Conflicts** - System prevents all conflicts automatically  
 ✅ **Scalable** - Handles 100+ programs easily  
 ✅ **Flexible** - Generate per-faculty or all at once  
-✅ **Fast** - 30-65 minutes for full university  
+✅ **Fast** - 30-65 minutes for full tt  
 ✅ **Reliable** - All data persisted in database  
 
 ---
 
 ## 🚀 **Ready to Use!**
 
-Your system is now ready for full university timetable generation. Simply:
+Your system is now ready for full tt timetable generation. Simply:
 
 1. Import your data (with Faculty field)
 2. Run: `POST /api/timetable/generate/all-faculties`
 3. Wait 30-65 minutes
-4. Get complete, conflict-free university timetable!
+4. Get complete, conflict-free tt timetable!
 
 **That's it!** The system handles everything automatically. 🎉

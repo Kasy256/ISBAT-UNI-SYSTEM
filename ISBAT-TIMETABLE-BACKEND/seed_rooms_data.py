@@ -1,11 +1,11 @@
-"""Seed room data for ISBAT Timetable System"""
+"""Seed room data for Cartlyf Timetable System"""
 
 from app.models.room import Room
 from typing import List, Dict
 
 def get_all_rooms() -> List[Dict]:
     """
-    Get all room data from ISBAT campuses
+    Get all room data from Cartlyf campuses
     
     Returns:
         List of room dictionaries ready for MongoDB insertion
@@ -227,7 +227,7 @@ if __name__ == '__main__':
     stats = get_room_statistics()
     
     print("\n" + "="*60)
-    print("ISBAT ROOM INVENTORY STATISTICS")
+    print("Cartlyf ROOM INVENTORY STATISTICS")
     print("="*60)
     print(f"\n📊 Total Rooms: {stats['total_rooms']}")
     

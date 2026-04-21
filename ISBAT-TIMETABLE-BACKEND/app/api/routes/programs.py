@@ -1,4 +1,4 @@
-﻿"""Program management routes."""
+"""Program management routes."""
 
 from flask import Blueprint, request, jsonify
 from app import get_db
@@ -66,8 +66,10 @@ def get_programs():
             'programs': programs
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<program_id>', methods=['GET'])
@@ -87,8 +89,10 @@ def get_program(program_id):
             'program': group
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/', methods=['POST'])
@@ -153,8 +157,10 @@ def create_program():
             '_id': str(result.inserted_id)
         }), 201
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<program_id>', methods=['PUT'])
@@ -202,8 +208,10 @@ def update_program(program_id):
             'message': 'Program updated successfully'
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<program_id>', methods=['DELETE'])
@@ -222,8 +230,10 @@ def delete_program(program_id):
             'message': 'Program deleted successfully'
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/bulk', methods=['POST'])
@@ -280,8 +290,10 @@ def bulk_create_programs():
             'count': len(result.inserted_ids)
         }), 201
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<program_id>/subjects', methods=['POST'])
@@ -316,8 +328,10 @@ def add_courses_to_program(program_id):
             'message': f'Added {len(course_units)} subject(s) to program'
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<program_id>/subjects/<course_id>', methods=['DELETE'])
@@ -339,8 +353,10 @@ def remove_course_from_program(program_id, course_id):
             'message': 'Subject removed from program'
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/search', methods=['POST'])
@@ -401,8 +417,10 @@ def search_programs():
             'programs': programs
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/statistics', methods=['GET'])
@@ -462,6 +480,8 @@ def get_program_statistics():
             }
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 

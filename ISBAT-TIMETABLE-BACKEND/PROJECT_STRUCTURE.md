@@ -1,4 +1,4 @@
-# ISBAT Timetable System - Project Structure
+# Cartlyf Timetable System - Project Structure
 
 ## 📁 Directory Structure
 

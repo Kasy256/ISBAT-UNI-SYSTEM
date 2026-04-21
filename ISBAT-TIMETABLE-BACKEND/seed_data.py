@@ -1,5 +1,5 @@
-﻿"""
-Master data seeding script for ISBAT Timetable Scheduler
+"""
+Master data seeding script for Cartlyf Timetable Scheduler
 Uses modular seed data files for cleaner organization
 """
 
@@ -23,7 +23,7 @@ def seed_all():
     """Main seeding function"""
     
     print("\n" + "="*70)
-    print(" "*20 + "ISBAT DATA SEEDING")
+    print(" "*20 + "Cartlyf DATA SEEDING")
     print("="*70 + "\n")
     
     # Connect to MongoDB
@@ -34,7 +34,7 @@ def seed_all():
         db = client[db_name]
         print(f"Connected to MongoDB: {db_name}\n")
     except Exception as e:
-        print(f"❌ Failed to connect to MongoDB: {e}")
+        print(f"FAILED to connect to MongoDB: {e}")
         return False
     
     # Clear existing data
@@ -57,7 +57,7 @@ def seed_all():
     default_users = [
         {
             'id': str(uuid.uuid4()),
-            'email': 'admin@isbat.ac.ug',
+            'email': 'admin@Cartlyf.ac.ug',
             'password_hash': generate_password_hash('Admin@123'),
             'full_name': 'System Administrator',
             'role': 'admin',
@@ -68,7 +68,7 @@ def seed_all():
         },
         {
             'id': str(uuid.uuid4()),
-            'email': 'scheduler@isbat.ac.ug',
+            'email': 'scheduler@Cartlyf.ac.ug',
             'password_hash': generate_password_hash('Scheduler@123'),
             'full_name': 'Timetable Scheduler',
             'role': 'scheduler',
@@ -79,7 +79,7 @@ def seed_all():
         },
         {
             'id': str(uuid.uuid4()),
-            'email': 'viewer@isbat.ac.ug',
+            'email': 'viewer@Cartlyf.ac.ug',
             'password_hash': generate_password_hash('Viewer@123'),
             'full_name': 'Timetable Viewer',
             'role': 'viewer',

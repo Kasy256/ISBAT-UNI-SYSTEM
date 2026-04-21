@@ -60,8 +60,10 @@ def get_lecturer_workload(timetable_id):
             'lecturer_workload': workload_list
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<timetable_id>/room-utilization', methods=['GET'])
@@ -120,8 +122,10 @@ def get_room_utilization(timetable_id):
             'room_utilization': utilization_list
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 
 @bp.route('/<timetable_id>', methods=['GET'])
@@ -199,6 +203,8 @@ def get_reports(timetable_id):
             'room_utilization': utilization_list
         }), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 

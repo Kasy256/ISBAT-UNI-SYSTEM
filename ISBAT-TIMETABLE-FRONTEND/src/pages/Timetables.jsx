@@ -32,7 +32,9 @@ export default function Timetables() {
   const [timeSlotsOpen, setTimeSlotsOpen] = useState(false);
   const [term, setTerm] = useState("");
   const [generationProgress, setGenerationProgress] = useState(null);
+  const [isPolling, setIsPolling] = useState(false);
   const progressIntervalRef = useRef(null);
+
 
   // Fetch timetables
   const { data, isLoading, error } = useQuery({
@@ -49,73 +51,80 @@ export default function Timetables() {
   const generateMutation = useMutation({
     mutationFn: timetableAPI.generate,
     onSuccess: (data) => {
-      // Stop polling
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
-      setGenerationProgress(null);
-      queryClient.invalidateQueries({ queryKey: ['timetables'] });
-      toast.success(`Term ${term} timetable generated successfully!`);
-      setShowForm(false);
-      setTerm("");
-      // Navigate to the generated timetable
-      if (data.timetable_id) {
-        navigate(`/timetable?id=${data.timetable_id}`);
-      }
+      // Don't stop polling yet! The server returned 202 Accepted.
+      // We need to keep polling until the progress says 'complete'.
+      setIsPolling(true);
+      toast.info("Generation started in background...");
     },
+
     onError: (error) => {
-      // Stop polling on error
+      setIsPolling(false);
       if (progressIntervalRef.current) {
         clearInterval(progressIntervalRef.current);
         progressIntervalRef.current = null;
       }
       setGenerationProgress(null);
-      toast.error(error.message || "Failed to generate timetable");
+      toast.error(error.message || "Failed to start generation");
     },
   });
 
   // Poll for progress
   useEffect(() => {
-    if (generateMutation.isPending && term) {
+    if ((generateMutation.isPending || isPolling) && term) {
       const pollProgress = async () => {
         try {
           const progress = await timetableAPI.getProgress(parseInt(term));
           setGenerationProgress(progress);
           
-          // Stop polling if completed or error
-          if (progress.status === 'completed' || progress.status === 'error') {
+          if (progress.stage === 'Complete' || progress.percentage === 100) {
+            setIsPolling(false);
             if (progressIntervalRef.current) {
               clearInterval(progressIntervalRef.current);
               progressIntervalRef.current = null;
             }
+            setGenerationProgress(null);
+            queryClient.invalidateQueries({ queryKey: ['timetables'] });
+            toast.success(`Term ${term} timetable generated successfully!`);
+            setShowForm(false);
+            setTerm("");
+          } else if (progress.stage === 'Error' || progress.percentage === -1) {
+            setIsPolling(false);
+            if (progressIntervalRef.current) {
+              clearInterval(progressIntervalRef.current);
+              progressIntervalRef.current = null;
+            }
+            setGenerationProgress(null);
+            toast.error(progress.message || "Generation failed in background");
           }
         } catch (error) {
           console.error('Failed to fetch progress:', error);
         }
       };
-
-      // Poll immediately, then every 1 second
-      pollProgress();
-      progressIntervalRef.current = setInterval(pollProgress, 1000);
+      
+      // Poll immediately, then every 2 seconds
+      if (!progressIntervalRef.current) {
+        pollProgress();
+        progressIntervalRef.current = setInterval(pollProgress, 2000);
+      }
 
       return () => {
-        if (progressIntervalRef.current) {
+        if (!isPolling && !generateMutation.isPending && progressIntervalRef.current) {
           clearInterval(progressIntervalRef.current);
           progressIntervalRef.current = null;
         }
       };
     } else {
-      // Clear interval if not pending
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
-      if (!generateMutation.isPending) {
+      // Clear interval if not pending and not polling
+      if (!generateMutation.isPending && !isPolling) {
+        if (progressIntervalRef.current) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
         setGenerationProgress(null);
       }
     }
-  }, [generateMutation.isPending, term]);
+  }, [generateMutation.isPending, isPolling, term, queryClient, toast, setShowForm, setTerm, navigate]);
+
 
   const handleGenerate = () => {
     if (!term) {
@@ -207,10 +216,11 @@ export default function Timetables() {
 
             <div className="flex gap-2">
               <Button
-                disabled={!term || generateMutation.isPending}
+                disabled={!term || generateMutation.isPending || isPolling}
                 onClick={handleGenerate}
               >
-                {generateMutation.isPending ? (
+                {(generateMutation.isPending || isPolling) ? (
+
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Generating...

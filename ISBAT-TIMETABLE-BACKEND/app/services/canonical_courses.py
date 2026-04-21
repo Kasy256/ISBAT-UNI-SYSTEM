@@ -6,7 +6,7 @@ This allows lecturers to teach equivalent subjects across programs without
 duplicating specializations.
 
 IMPORTANT: Only subjects with the SAME or VERY SIMILAR course unit names are grouped together.
-Based on actual BSCAIT and BCS subject data from ISBAT University.
+Based on actual BSCAIT and BCS subject data from Cartlyf tt.
 
 Example:
     BIT1103 (Problem Solving Methodologies Using C - Theory)
@@ -376,7 +376,7 @@ def get_course_groupings() -> Dict[str, List[str]]:
 def print_groupings():
     """Print all subject groupings in a readable format."""
     print("=" * 80)
-    print("CANONICAL SUBJECT GROUPINGS - ISBAT UNIVERSITY")
+    print("CANONICAL SUBJECT GROUPINGS - Cartlyf tt")
     print("=" * 80)
     
     grouped = {}

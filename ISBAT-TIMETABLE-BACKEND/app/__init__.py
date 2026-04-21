@@ -1,4 +1,4 @@
-﻿from flask import Flask
+from flask import Flask
 from flask_cors import CORS
 from pymongo import MongoClient
 from pymongo.read_preferences import ReadPreference
@@ -26,31 +26,42 @@ def create_app(config_class=Config):
     try:
         # Set connection timeout and read preferences to handle replica set issues
         # readPreference=secondaryPreferred allows reading from secondaries when primary is unavailable
-        mongo_uri = app.config['MONGO_URI']
+        mongo_uri = app.config.get('MONGO_URI')
         
-        # Add read preference to URI if not already present
-        if 'readPreference' not in mongo_uri:
-            separator = '&' if '?' in mongo_uri else '?'
-            mongo_uri = f"{mongo_uri}{separator}readPreference=secondaryPreferred"
-        
-        mongo_client = MongoClient(
-            mongo_uri,
-            serverSelectionTimeoutMS=10000,  # 10 second timeout (increased from 5)
-            connectTimeoutMS=10000,  # 10 second timeout (increased from 5)
-            socketTimeoutMS=30000,  # 30 second timeout for operations
-            retryWrites=True,
-            retryReads=True,
-            read_preference=ReadPreference.SECONDARY_PREFERRED  # Allow reading from secondaries
-        )
-        # Test connection with a more lenient approach
-        try:
-            mongo_client.admin.command('ping')
-        except Exception as ping_error:
-            # If ping fails, try to connect anyway - might be a replica set issue
-            print(f"Warning: Initial ping failed: {ping_error}")
-            print("Attempting to continue with connection...")
-        
-        db = mongo_client[app.config['MONGO_DB_NAME']]
+        if mongo_uri:
+            # Add read preference to URI if not already present
+            if 'readPreference' not in mongo_uri:
+                separator = '&' if '?' in mongo_uri else '?'
+                mongo_uri = f"{mongo_uri}{separator}readPreference=secondaryPreferred"
+            
+            mongo_client = MongoClient(
+                mongo_uri,
+                serverSelectionTimeoutMS=10000,
+                connectTimeoutMS=10000,
+                socketTimeoutMS=30000,
+                retryWrites=True,
+                retryReads=True,
+                read_preference=ReadPreference.SECONDARY_PREFERRED
+            )
+            
+            # Test connection with a timeout
+            try:
+                mongo_client.admin.command('ping')
+                print("✓ MongoDB connected successfully")
+            except Exception as ping_error:
+                print(f"Warning: Initial ping failed: {ping_error}")
+                print("Attempting to continue with connection...")
+            
+            db = mongo_client[app.config.get('MONGO_DB_NAME', 'timetable_scheduler')]
+        else:
+            print("Warning: MONGO_URI environment variable is not set.")
+            mongo_client = None
+            db = None
+            
+    except Exception as e:
+        print(f"✗ MongoDB initialization failed: {e}")
+        mongo_client = None
+        db = None
         
         # Create indexes for performance (handle errors gracefully)
         try:
@@ -172,14 +183,44 @@ def create_app(config_class=Config):
     
     @app.errorhandler(500)
     def internal_error(error):
-        return {'error': 'Internal server error'}, 500
+        """Enhanced error handler with database diagnostics"""
+        import traceback
+        error_msg = str(error)
+        
+        # Check if it's a database connection issue
+        if mongo_client is None or db is None:
+            return {
+                'error': 'Database Connection Unavailable',
+                'status': 503,
+                'details': 'The application cannot connect to MongoDB. This is usually due to missing or incorrect MONGO_URI in environment variables.',
+                'action_required': 'Set MONGO_URI and MONGO_DB_NAME in your Render dashboard settings.',
+                'setup_guide': 'See RENDER_SETUP.md in the repository root for instructions.'
+            }, 503
+        
+        # Log the full traceback for debugging
+        print(f"500 Error: {error_msg}")
+        print(traceback.format_exc())
+        
+        return {
+            'error': 'Internal Server Error',
+            'status': 500,
+            'message': error_msg if app.config.get('DEBUG') else 'An unexpected error occurred during processing.'
+        }, 500
     
     return app
 
 def get_db():
-    """Get database instance"""
+    """Get database instance with explicit connection check"""
     if db is None:
+        # Check if it's a configuration issue
+        from app.config import Config
+        mongo_uri = Config.MONGO_URI
+        
+        error_msg = "MongoDB connection not available."
+        if not mongo_uri or "philiphinny436" in mongo_uri:
+            error_msg += " It appears the MONGO_URI is using a default or missing configuration."
+            
         raise ConnectionError(
-            "MongoDB connection not available. Please check your connection settings and ensure MongoDB is accessible."
+            f"{error_msg} Please ensure MONGO_URI is set correctly in your environment variables."
         )
     return db

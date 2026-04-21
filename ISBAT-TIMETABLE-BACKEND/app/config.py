@@ -1,4 +1,4 @@
-﻿import os
+import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,8 +10,8 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
     DEBUG = os.getenv('FLASK_DEBUG', 'True') == 'True'
     
-    # MongoDB
-    MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://philiphinny436:hinny123@cluster0.h3zklgk.mongodb.net/')
+    # MongoDB - MUST be provided via environment variables in production
+    MONGO_URI = os.getenv('MONGO_URI')
     MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'timetable_scheduler')
     
     # CSP Configuration

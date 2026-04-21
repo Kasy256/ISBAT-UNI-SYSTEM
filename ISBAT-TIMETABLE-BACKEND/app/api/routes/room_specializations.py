@@ -20,8 +20,10 @@ def get_room_specializations():
             spec['_id'] = str(spec['_id'])
         
         return jsonify({'room_specializations': specializations}), 200
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/<spec_id>', methods=['GET'])
 def get_room_specialization(spec_id):
@@ -35,8 +37,10 @@ def get_room_specialization(spec_id):
         
         specialization['_id'] = str(specialization['_id'])
         return jsonify(specialization), 200
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/', methods=['POST'])
 @require_auth
@@ -112,8 +116,10 @@ def update_room_specialization(spec_id):
         
         return jsonify({'message': 'Room specialization updated successfully'}), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
 
 @bp.route('/<spec_id>', methods=['DELETE'])
 @require_auth
@@ -140,5 +146,7 @@ def delete_room_specialization(spec_id):
         
         return jsonify({'message': 'Room specialization deleted successfully'}), 200
         
+    except ConnectionError as e:
+        return jsonify({"error": "Database Connection Error", "message": str(e)}), 503
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
